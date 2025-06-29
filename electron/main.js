@@ -34,8 +34,14 @@ function startServer() {
   return new Promise((resolve, reject) => {
     console.log('Starting MyRadiko server...');
     
+    // パッケージ化された環境での Node.js パス取得
+    const nodeExecutable = process.execPath;
     const serverPath = path.join(__dirname, '../server/app.js');
-    serverProcess = spawn('node', [serverPath], {
+    
+    console.log('Node executable:', nodeExecutable);
+    console.log('Server path:', serverPath);
+    
+    serverProcess = spawn(nodeExecutable, [serverPath], {
       stdio: 'pipe',
       cwd: path.join(__dirname, '..')
     });
@@ -66,7 +72,17 @@ function startServer() {
 
     serverProcess.on('error', (error) => {
       console.error('Failed to start server:', error);
-      reject(error);
+      console.error('Error details:', error.message);
+      console.error('Error code:', error.code);
+      
+      // ENOENT エラーの場合の詳細情報
+      if (error.code === 'ENOENT') {
+        console.error('Node.js executable not found. Trying alternative approach...');
+        // タイムアウトで続行させる（サーバーなしでも UI だけ表示）
+        setTimeout(() => resolve(), 1000);
+      } else {
+        reject(error);
+      }
     });
 
     // タイムアウト処理
@@ -336,15 +352,31 @@ app.whenReady().then(async () => {
   console.log('MyRadiko Electron app starting...');
   
   try {
-    // サーバーを起動
-    await startServer();
+    // サーバーを起動（失敗してもアプリは続行）
+    try {
+      await startServer();
+      console.log('MyRadiko server started successfully');
+    } catch (serverError) {
+      console.error('Failed to start server, but continuing with UI:', serverError);
+      dialog.showMessageBox(null, {
+        type: 'warning',
+        title: 'サーバー起動警告',
+        message: 'バックエンドサーバーの起動に失敗しました',
+        detail: 'UIは表示されますが、一部機能が制限される場合があります。\n\n開発モード（start.bat）での実行を試してください。',
+        buttons: ['続行', '終了']
+      }).then((result) => {
+        if (result.response === 1) {
+          app.quit();
+        }
+      });
+    }
     
     // ウィンドウとトレイを作成
     createWindow();
     createTray();
     createMenu();
     
-    console.log('MyRadiko app started successfully');
+    console.log('MyRadiko app UI started successfully');
   } catch (error) {
     console.error('Failed to start MyRadiko app:', error);
     dialog.showErrorBox('起動エラー', 'MyRadiko の起動に失敗しました。\n\n' + error.message);

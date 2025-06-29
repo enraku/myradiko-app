@@ -1,0 +1,136 @@
+{
+  "blocks": [
+    {
+      "startTime": "2025-06-27T13:00:00.000Z",
+      "endTime": "2025-06-27T18:00:00.000Z",
+      "actualEndTime": "2025-06-27T16:40:31.023Z",
+      "perModelStats": {
+        "claude-sonnet-4-20250514": {
+          "tokenCounts": {
+            "inputTokens": 334,
+            "outputTokens": 12574,
+            "cacheCreationTokens": 354664,
+            "cacheReadTokens": 10989332,
+            "totalTokens": 12908
+          },
+          "costUSD": 4.816402,
+          "entriesCount": 145
+        }
+      },
+      "totalTokens": 12908,
+      "totalTokensOld": 12908,
+      "costUSD": 4.816402,
+      "entries": 146,
+      "limits": [
+        {
+          "type": "general_limit",
+          "timestamp": "2025-06-27T16:40:31.023Z",
+          "content": "Claude AI usage limit reached|1751047200",
+          "resetTime": "2025-06-27T18:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "startTime": "2025-06-28T05:00:00.000Z",
+      "endTime": "2025-06-28T10:00:00.000Z",
+      "actualEndTime": "2025-06-28T07:13:53.490Z",
+      "perModelStats": {
+        "claude-sonnet-4-20250514": {
+          "tokenCounts": {
+            "inputTokens": 577,
+            "outputTokens": 8834,
+            "cacheCreationTokens": 746692,
+            "cacheReadTokens": 16093978,
+            "totalTokens": 9411
+          },
+          "costUSD": 7.762529,
+          "entriesCount": 202
+        }
+      },
+      "totalTokens": 9411,
+      "totalTokensOld": 9411,
+      "costUSD": 7.762529,
+      "entries": 204,
+      "limits": [
+        {
+          "type": "general_limit",
+          "timestamp": "2025-06-28T05:03:57.223Z",
+          "content": "Claude AI usage limit reached|1751047200",
+          "resetTime": "2025-06-27T18:00:00.000Z"
+        },
+        {
+          "type": "general_limit",
+          "timestamp": "2025-06-28T07:13:53.490Z",
+          "content": "Claude AI usage limit reached|1751104800",
+          "resetTime": "2025-06-28T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "startTime": "2025-06-28T12:00:00.000Z",
+      "endTime": "2025-06-28T17:00:00.000Z",
+      "actualEndTime": "2025-06-28T16:18:58.243Z",
+      "perModelStats": {
+        "claude-sonnet-4-20250514": {
+          "tokenCounts": {
+            "inputTokens": 579,
+            "outputTokens": 6571,
+            "cacheCreationTokens": 1129144,
+            "cacheReadTokens": 17857216,
+            "totalTokens": 7150
+          },
+          "costUSD": 9.691757,
+          "entriesCount": 202
+        }
+      },
+      "totalTokens": 7150,
+      "totalTokensOld": 7150,
+      "costUSD": 9.691757,
+      "entries": 204,
+      "limits": [
+        {
+          "type": "general_limit",
+          "timestamp": "2025-06-28T12:22:29.822Z",
+          "content": "Claude AI usage limit reached|1751104800",
+          "resetTime": "2025-06-28T10:00:00.000Z"
+        },
+        {
+          "type": "general_limit",
+          "timestamp": "2025-06-28T16:18:58.243Z",
+          "content": "Claude AI usage limit reached|1751130000",
+          "resetTime": "2025-06-28T17:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "startTime": "2025-06-28T17:00:00.000Z",
+      "endTime": "2025-06-28T22:00:00.000Z",
+      "actualEndTime": "2025-06-28T20:38:38.154Z",
+      "perModelStats": {
+        "claude-sonnet-4-20250514": {
+          "tokenCounts": {
+            "inputTokens": 199,
+            "outputTokens": 1286,
+            "cacheCreationTokens": 457931,
+            "cacheReadTokens": 6056795,
+            "totalTokens": 1485
+          },
+          "costUSD": 3.554167,
+          "entriesCount": 93
+        }
+      },
+      "totalTokens": 1485,
+      "totalTokensOld": 1485,
+      "costUSD": 3.554167,
+      "entries": 94,
+      "limits": [
+        {
+          "type": "general_limit",
+          "timestamp": "2025-06-28T17:54:16.134Z",
+          "content": "Claude AI usage limit reached|1751130000",
+          "resetTime": "2025-06-28T17:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}
