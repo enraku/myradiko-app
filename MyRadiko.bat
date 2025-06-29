@@ -10,15 +10,16 @@ REM 実行ファイルを探す
 set "EXE_PATH="
 echo 🔍 実行ファイルを検索中...
 
+REM パスにスペースが含まれる場合に対応
 if exist "dist-electron\MyRadiko 1.0.0.exe" (
-    set "EXE_PATH=dist-electron\MyRadiko 1.0.0.exe"
+    set EXE_PATH=dist-electron\MyRadiko 1.0.0.exe
     echo ✅ 見つかりました: dist-electron\MyRadiko 1.0.0.exe
 ) else (
     echo ❌ dist-electron\MyRadiko 1.0.0.exe は見つかりません
 )
 
 if exist "MyRadiko.exe" (
-    set "EXE_PATH=MyRadiko.exe"
+    set EXE_PATH=MyRadiko.exe
     echo ✅ 見つかりました: MyRadiko.exe
 ) else (
     echo ❌ MyRadiko.exe は見つかりません
@@ -62,7 +63,17 @@ if "%EXE_PATH%"=="" (
 REM MyRadiko.exe を起動
 echo 🚀 MyRadiko を起動します...
 echo 実行ファイル: "%EXE_PATH%"
-"%EXE_PATH%"
+
+REM スペースを含むパスに対応した起動方法
+if exist "dist-electron\MyRadiko 1.0.0.exe" (
+    start "" "dist-electron\MyRadiko 1.0.0.exe"
+) else if exist "MyRadiko.exe" (
+    start "" "MyRadiko.exe"
+) else (
+    echo ❌ 実行ファイルが見つかりません
+    pause
+    exit /b 1
+)
 
 echo ✅ MyRadiko が起動されました
 echo ウィンドウが表示されない場合は、タスクバーを確認してください
