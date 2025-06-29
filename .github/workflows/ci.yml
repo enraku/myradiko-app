@@ -1,0 +1,165 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    name: Backend Tests
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install backend dependencies
+      run: npm ci
+    
+    - name: Create test database
+      run: |
+        mkdir -p data
+        npm run init-db
+    
+    - name: Run backend tests
+      run: npm test
+      
+    - name: Run backend linting
+      run: npm run lint --if-present
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    name: Frontend Tests
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'client/package-lock.json'
+    
+    - name: Install frontend dependencies
+      working-directory: ./client
+      run: npm ci
+    
+    - name: Run frontend tests
+      working-directory: ./client
+      run: npm test --if-present
+      
+    - name: Run frontend linting
+      working-directory: ./client
+      run: npm run lint --if-present
+    
+    - name: Build frontend
+      working-directory: ./client
+      run: npm run build
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: client/dist/
+
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run npm audit (backend)
+      run: npm audit --audit-level moderate
+      continue-on-error: true
+    
+    - name: Run npm audit (frontend)
+      working-directory: ./client
+      run: npm audit --audit-level moderate
+      continue-on-error: true
+
+  integration-test:
+    runs-on: ubuntu-latest
+    name: Integration Tests
+    needs: [test-backend, test-frontend]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install backend dependencies
+      run: npm ci
+    
+    - name: Install frontend dependencies
+      working-directory: ./client
+      run: npm ci
+    
+    - name: Setup test environment
+      run: |
+        mkdir -p data
+        mkdir -p recordings
+        npm run init-db
+    
+    - name: Start backend server
+      run: |
+        npm start &
+        sleep 10
+        
+    - name: Build and start frontend
+      working-directory: ./client
+      run: |
+        npm run build
+        npm run preview &
+        sleep 5
+    
+    - name: Run health checks
+      run: |
+        curl -f http://localhost:3010/api/health || exit 1
+        curl -f http://localhost:4173 || exit 1
+    
+    - name: Stop servers
+      run: |
+        pkill -f "node.*server/app.js" || true
+        pkill -f "vite.*preview" || true
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    name: Deploy to Staging
+    needs: [test-backend, test-frontend, security-scan, integration-test]
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to staging
+      run: |
+        echo "Staging deployment would happen here"
+        echo "This could include deploying to a staging server"
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    needs: [test-backend, test-frontend, security-scan, integration-test]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to production
+      run: |
+        echo "Production deployment would happen here"
+        echo "This could include building Docker images"
+        echo "Or deploying to production servers"

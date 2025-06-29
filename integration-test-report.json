@@ -1,0 +1,94 @@
+{
+  "summary": {
+    "totalTests": 14,
+    "passedTests": 11,
+    "failedTests": 3
+  },
+  "results": [
+    {
+      "test": "サーバー接続",
+      "success": true,
+      "message": "Status: 200",
+      "timestamp": "2025-06-28T13:20:52.445Z"
+    },
+    {
+      "test": "放送局一覧API（テスト）",
+      "success": true,
+      "message": "5局取得",
+      "timestamp": "2025-06-28T13:20:52.448Z"
+    },
+    {
+      "test": "設定API",
+      "success": true,
+      "message": "11設定取得",
+      "timestamp": "2025-06-28T13:20:52.455Z"
+    },
+    {
+      "test": "予約一覧API（テスト）",
+      "success": true,
+      "message": "2件の予約",
+      "timestamp": "2025-06-28T13:20:52.458Z"
+    },
+    {
+      "test": "録音ファイル一覧API（テスト）",
+      "success": true,
+      "message": "2件のファイル",
+      "timestamp": "2025-06-28T13:20:52.460Z"
+    },
+    {
+      "test": "番組表取得（テスト）",
+      "success": true,
+      "message": "TBSラジオ 1番組",
+      "timestamp": "2025-06-28T13:20:52.464Z"
+    },
+    {
+      "test": "録音予約作成",
+      "success": true,
+      "message": "予約ID: undefined",
+      "timestamp": "2025-06-28T13:20:52.478Z"
+    },
+    {
+      "test": "予約詳細取得",
+      "success": false,
+      "message": "Request failed with status code 404",
+      "timestamp": "2025-06-28T13:20:52.491Z"
+    },
+    {
+      "test": "予約削除（クリーンアップ）",
+      "success": false,
+      "message": "Request failed with status code 404",
+      "timestamp": "2025-06-28T13:20:52.500Z"
+    },
+    {
+      "test": "スケジューラー状態確認",
+      "success": true,
+      "message": "アクティブ: No",
+      "timestamp": "2025-06-28T13:20:52.502Z"
+    },
+    {
+      "test": "アクティブ予約確認",
+      "success": true,
+      "message": "0件のアクティブ予約",
+      "timestamp": "2025-06-28T13:20:52.505Z"
+    },
+    {
+      "test": "設定更新",
+      "success": true,
+      "message": "設定更新成功",
+      "timestamp": "2025-06-28T13:20:52.537Z"
+    },
+    {
+      "test": "録音ディレクトリ確認",
+      "success": true,
+      "message": "パス: /home/hoshi/project/myradiko/recordings",
+      "timestamp": "2025-06-28T13:20:52.537Z"
+    },
+    {
+      "test": "データベースファイル確認",
+      "success": false,
+      "message": "データベースファイルが存在しません",
+      "timestamp": "2025-06-28T13:20:52.538Z"
+    }
+  ],
+  "timestamp": "2025-06-28T13:20:52.538Z"
+}

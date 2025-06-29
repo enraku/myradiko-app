@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    name: Create Release
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install backend dependencies
+      run: npm ci
+    
+    - name: Install frontend dependencies
+      working-directory: ./client
+      run: npm ci
+    
+    - name: Build frontend
+      working-directory: ./client
+      run: npm run build
+    
+    - name: Create release package
+      run: |
+        mkdir -p release
+        cp -r server release/
+        cp -r client/dist release/client
+        cp -r data release/
+        cp package.json package-lock.json README.md release/
+        cd release && tar -czf ../myradiko-${{ github.ref_name }}.tar.gz .
+    
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: MyRadiko ${{ github.ref }}
+        body: |
+          ## 新機能・改善
+          - 番組表表示と検索機能
+          - 録音予約システム
+          - ファイル管理機能
+          - 設定システム
+          - ログ機能
+          
+          ## インストール方法
+          1. アーカイブをダウンロード・展開
+          2. `npm install`でバックエンド依存関係をインストール
+          3. `npm run init-db`でデータベースを初期化
+          4. `npm start`でサーバーを起動
+          
+          ## 注意事項
+          - Node.js v16以上が必要です
+          - radikoの利用規約に従ってご使用ください
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./myradiko-${{ github.ref_name }}.tar.gz
+        asset_name: myradiko-${{ github.ref_name }}.tar.gz
+        asset_content_type: application/gzip

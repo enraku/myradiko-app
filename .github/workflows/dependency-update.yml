@@ -1,0 +1,67 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # 毎週月曜日の午前2時（JST午前11時）に実行
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    name: Update Dependencies
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Check for backend updates
+      run: |
+        npm outdated || true
+        npx npm-check-updates -u --target minor
+        
+    - name: Check for frontend updates
+      working-directory: ./client
+      run: |
+        npm outdated || true
+        npx npm-check-updates -u --target minor
+    
+    - name: Install updated dependencies
+      run: |
+        npm install
+        cd client && npm install
+    
+    - name: Run tests
+      run: |
+        npm test --if-present
+        cd client && npm test --if-present
+    
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'chore: update dependencies'
+        title: '依存関係の更新'
+        body: |
+          ## 依存関係の更新
+          
+          この PR は依存関係を最新のマイナーバージョンに更新します。
+          
+          ### 変更内容
+          - バックエンドとフロントエンドの依存関係を更新
+          - セキュリティパッチと機能改善を適用
+          
+          ### テスト状況
+          - 自動テストが実行されました
+          - 手動テストが推奨されます
+          
+          自動生成された PR です。マージ前に動作確認をお願いします。
+        branch: dependency-updates
+        delete-branch: true
