@@ -8,8 +8,21 @@ echo.
 
 REM 実行ファイルを探す
 set "EXE_PATH="
-if exist "dist-electron\MyRadiko 1.0.0.exe" set "EXE_PATH=dist-electron\MyRadiko 1.0.0.exe"
-if exist "MyRadiko.exe" set "EXE_PATH=MyRadiko.exe"
+echo 🔍 実行ファイルを検索中...
+
+if exist "dist-electron\MyRadiko 1.0.0.exe" (
+    set "EXE_PATH=dist-electron\MyRadiko 1.0.0.exe"
+    echo ✅ 見つかりました: dist-electron\MyRadiko 1.0.0.exe
+) else (
+    echo ❌ dist-electron\MyRadiko 1.0.0.exe は見つかりません
+)
+
+if exist "MyRadiko.exe" (
+    set "EXE_PATH=MyRadiko.exe"
+    echo ✅ 見つかりました: MyRadiko.exe
+) else (
+    echo ❌ MyRadiko.exe は見つかりません
+)
 
 REM 実行ファイルが存在するかチェック
 if "%EXE_PATH%"=="" (
@@ -48,7 +61,8 @@ if "%EXE_PATH%"=="" (
 
 REM MyRadiko.exe を起動
 echo 🚀 MyRadiko を起動します...
-start "" "%EXE_PATH%"
+echo 実行ファイル: "%EXE_PATH%"
+"%EXE_PATH%"
 
 echo ✅ MyRadiko が起動されました
 echo ウィンドウが表示されない場合は、タスクバーを確認してください

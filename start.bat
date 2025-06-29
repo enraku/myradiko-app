@@ -52,7 +52,16 @@ npm run build
 REM データベースの初期化チェック
 if not exist "data\myradiko.db" (
     echo 🗄️ データベースを初期化しています...
+    echo 実行中: npm run db:init
     npm run db:init
+    if errorlevel 1 (
+        echo ❌ データベース初期化に失敗しました
+        echo 手動で以下のコマンドを実行してください:
+        echo npm run db:init
+        pause
+    ) else (
+        echo ✅ データベース初期化完了
+    )
 )
 
 REM ディレクトリ作成
