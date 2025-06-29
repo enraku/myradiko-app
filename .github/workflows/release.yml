@@ -27,8 +27,49 @@ jobs:
       working-directory: ./client
       run: npm ci
     
-    - name: Build all installers
+    - name: Install NSIS
+      run: |
+        # NSIS をインストール
+        choco install nsis -y
+        # パスを更新
+        $env:PATH += ";C:\Program Files (x86)\NSIS"
+        echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    
+    - name: Install NSIS plugins
+      run: |
+        # 必要なNSISプラグインをインストール
+        $nsisDir = "C:\Program Files (x86)\NSIS"
+        $pluginsDir = "$nsisDir\Plugins\x86-unicode"
+        $includeDir = "$nsisDir\Include"
+        
+        # inetc プラグイン
+        Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip" -OutFile "$env:TEMP\inetc.zip"
+        Expand-Archive -Path "$env:TEMP\inetc.zip" -DestinationPath "$env:TEMP\inetc" -Force
+        Copy-Item "$env:TEMP\inetc\Plugins\x86-unicode\inetc.dll" -Destination $pluginsDir -Force
+        
+        # nsisunz プラグイン
+        Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5a/Nsisunz.zip" -OutFile "$env:TEMP\nsisunz.zip"
+        Expand-Archive -Path "$env:TEMP\nsisunz.zip" -DestinationPath "$env:TEMP\nsisunz" -Force
+        Copy-Item "$env:TEMP\nsisunz\Plugin\nsisunz.dll" -Destination $pluginsDir -Force
+        Copy-Item "$env:TEMP\nsisunz\nsisunz.nsh" -Destination $includeDir -Force
+        
+        # GetSize プラグイン
+        Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5e/GetSize.zip" -OutFile "$env:TEMP\getsize.zip"
+        Expand-Archive -Path "$env:TEMP\getsize.zip" -DestinationPath "$env:TEMP\getsize" -Force
+        Copy-Item "$env:TEMP\getsize\GetSize.nsh" -Destination $includeDir -Force
+    
+    - name: Build Electron installers
       run: npm run electron:build:all
+    
+    - name: Build NSIS auto-installer
+      run: |
+        cd installer
+        makensis MyRadiko-Installer.nsi
+        # Move installer to root directory for easier upload
+        if (Test-Path "MyRadiko-Setup-v1.0.0.exe") {
+          Move-Item "MyRadiko-Setup-v1.0.0.exe" "../MyRadiko-Setup-v1.0.0.exe"
+          Write-Host "Auto-installer moved to root directory"
+        }
     
     - name: Create Release
       id: create_release
@@ -45,8 +86,14 @@ jobs:
           
           ## 📦 ダウンロード
           
-          **推奨**: NSISインストーラー（`MyRadiko-Setup-${{ github.ref_name }}.exe`）
-          - 標準的なWindowsインストーラー
+          **🌟 自動ビルドインストーラー（推奨）**: `MyRadiko-AutoInstaller-${{ github.ref_name }}.exe`
+          - 🚀 **完全自動化** - Node.js、Git、依存関係、ビルドまで全自動
+          - 💾 **単体ファイル** - このファイル1つで完全インストール
+          - 🛠️ **技術知識不要** - 実行するだけで使用可能
+          - 🗑️ **完全アンインストール** - データ保持オプション付き
+          
+          **標準**: NSISインストーラー（`MyRadiko-Setup-${{ github.ref_name }}.exe`）
+          - 標準的なWindowsインストーラー（事前ビルド済み）
           - デスクトップショートカット自動作成
           - スタートメニュー登録
           - 簡単アンインストール
@@ -78,6 +125,16 @@ jobs:
           - 個人利用目的のみ
         draft: false
         prerelease: false
+    
+    - name: Upload Auto-Build Installer
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./MyRadiko-Setup-v1.0.0.exe
+        asset_name: MyRadiko-AutoInstaller-${{ github.ref_name }}.exe
+        asset_content_type: application/octet-stream
     
     - name: Upload NSIS Installer
       uses: actions/upload-release-asset@v1
