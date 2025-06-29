@@ -29,7 +29,10 @@
     "electron:pack": "npm run build && npx electron-builder",
     "electron:dist": "npm run build && npx electron-builder --publish=never",
     "electron:build": "npm run build && npx electron-builder --win",
-    "electron:build:portable": "npm run build && npx electron-builder --win portable"
+    "electron:build:portable": "npm run build && npx electron-builder --win portable",
+    "electron:build:nsis": "npm run build && npx electron-builder --win nsis",
+    "electron:build:msi": "npm run build && npx electron-builder --win msi",
+    "electron:build:all": "npm run build && npx electron-builder --win"
   },
   "keywords": [
     "radiko",
@@ -88,6 +91,10 @@
           "arch": ["x64"]
         },
         {
+          "target": "msi",
+          "arch": ["x64"]
+        },
+        {
           "target": "portable",
           "arch": ["x64"]
         }
@@ -109,6 +116,14 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "shortcutName": "MyRadiko",
+      "runAfterFinish": true,
+      "menuCategory": "ラジオ・メディア"
+    },
+    "msi": {
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "menuCategory": "ラジオ・メディア",
       "shortcutName": "MyRadiko"
     }
   }

@@ -166,7 +166,10 @@ npm run build        # フロントエンドビルド
 
 # Electronデスクトップアプリ関連
 npm run electron                # Electronアプリ起動
-npm run electron:build:portable # Windows用実行ファイル作成
+npm run electron:build:portable # ポータブル版作成
+npm run electron:build:nsis     # NSISインストーラー作成
+npm run electron:build:msi      # MSIインストーラー作成
+npm run electron:build:all      # 全インストーラー形式作成
 npm run electron:pack           # パッケージ作成
 npm run electron:dist           # 配布用パッケージ作成
 ```
@@ -192,11 +195,21 @@ cd client
 npm install
 cd ..
 
-# 実行ファイルをビルド（数分かかります）
-npm run electron:build:portable
+# ビルドオプション（お好みに応じて選択）
+npm run electron:build:portable    # ポータブル版（exe）
+npm run electron:build:nsis        # NSISインストーラー（exe）
+npm run electron:build:msi         # MSIインストーラー
+npm run electron:build:all         # 全形式（推奨）
 ```
 
-**3. 起動**
+**3. インストーラー形式の選択**
+- **ポータブル版** - 単体実行ファイル、インストール不要
+- **NSISインストーラー** - 標準的なWindows .exeインストーラー
+- **MSIインストーラー** - 企業環境向け .msiパッケージ
+
+**4. 起動方法**
+
+**ポータブル版の場合:**
 ```cmd
 # バッチファイルで起動
 MyRadiko.bat
@@ -205,10 +218,15 @@ MyRadiko.bat
 "dist-electron\MyRadiko 1.0.0.exe"
 ```
 
+**インストーラー版の場合:**
+- NSISインストーラー実行 → デスクトップ・スタートメニューから起動
+- MSIインストーラー実行 → デスクトップ・スタートメニューから起動
+
 **ビルド成果物:**
-- `dist-electron/MyRadiko 1.0.0.exe` - メイン実行ファイル（約180MB）
-- 各種DLLとリソースファイル
-- `MyRadiko.bat` - 実行ファイル起動用スクリプト（自動でパス検索）
+- `dist-electron/MyRadiko Setup 1.0.0.exe` - NSISインストーラー
+- `dist-electron/MyRadiko 1.0.0.msi` - MSIインストーラー  
+- `dist-electron/MyRadiko 1.0.0.exe` - ポータブル実行ファイル
+- `MyRadiko.bat` - ポータブル版起動用スクリプト
 
 **付属ファイル:**
 - `start.bat` - 開発モード起動スクリプト（Node.js環境用）
