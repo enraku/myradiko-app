@@ -54,6 +54,12 @@ MyRadikoは、radikoの番組を録音・管理するためのWindows用デス�
 - **node-cron** (スケジューラー)
 - radiko v3 API連携
 
+### デスクトップアプリ
+- **Electron** (Windows専用)
+- システムトレイ統合
+- スタンドアロン実行ファイル（約180MB）
+- Node.js環境不要で動作
+
 ## 起動方法
 
 ### 前提条件
@@ -66,8 +72,8 @@ MyRadikoは、radikoの番組を録音・管理するためのWindows用デス�
 
 **方法1: 実行ファイルをビルドして使用（推奨）**
 ```cmd
-git clone https://github.com/enraku/myradiko.git
-cd myradiko
+git clone https://github.com/enraku/myradiko-app.git
+cd myradiko-app
 npm install
 npm run electron:build:portable
 MyRadiko.bat
@@ -75,8 +81,8 @@ MyRadiko.bat
 
 **方法2: 開発モード（Node.js環境）**
 ```cmd
-git clone https://github.com/enraku/myradiko.git
-cd myradiko
+git clone https://github.com/enraku/myradiko-app.git
+cd myradiko-app
 start.bat
 ```
 
@@ -86,8 +92,8 @@ start.bat
 
 1. **プロジェクトクローン**
 ```bash
-git clone https://github.com/enraku/myradiko.git
-cd myradiko
+git clone https://github.com/enraku/myradiko-app.git
+cd myradiko-app
 ```
 
 2. **初期セットアップ**
@@ -157,8 +163,8 @@ npm run electron:dist           # 配布用パッケージ作成
 **2. ビルド手順**
 ```cmd
 # リポジトリをクローン
-git clone https://github.com/enraku/myradiko.git
-cd myradiko
+git clone https://github.com/enraku/myradiko-app.git
+cd myradiko-app
 
 # 依存関係をインストール
 npm install
@@ -264,7 +270,7 @@ MyRadiko.exe
 
 ### プロジェクト構造
 ```
-myradiko/
+myradiko-app/
 ├── server/               # バックエンド
 │   ├── models/          # データベースモデル
 │   ├── routes/          # APIルート
