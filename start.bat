@@ -77,7 +77,7 @@ if errorlevel 1 (
     echo 📋 トラブルシューティング:
     echo 1. Windows Defender やアンチウイルスソフトが Node.js をブロックしていないか確認
     echo 2. 管理者権限で実行してみる
-    echo 3. Web版を使用: ./start.sh
+    echo 3. 実行ファイル版を試す: MyRadiko.bat
     echo.
 )
 
