@@ -6,9 +6,14 @@ REM MyRadiko デスクトップアプリ起動 (Windows専用)
 echo 🖥️ MyRadiko デスクトップアプリを起動しています...
 echo.
 
+REM 実行ファイルを探す
+set "EXE_PATH="
+if exist "dist-electron\MyRadiko 1.0.0.exe" set "EXE_PATH=dist-electron\MyRadiko 1.0.0.exe"
+if exist "MyRadiko.exe" set "EXE_PATH=MyRadiko.exe"
+
 REM 実行ファイルが存在するかチェック
-if not exist "MyRadiko.exe" (
-    echo ❌ MyRadiko.exe が見つかりません
+if "%EXE_PATH%"=="" (
+    echo ❌ MyRadiko 実行ファイルが見つかりません
     echo.
     echo 📦 実行ファイルをビルドする必要があります
     echo この処理には数分かかります（初回のみ）
@@ -43,7 +48,7 @@ if not exist "MyRadiko.exe" (
 
 REM MyRadiko.exe を起動
 echo 🚀 MyRadiko を起動します...
-start "" "MyRadiko.exe"
+start "" "%EXE_PATH%"
 
 echo ✅ MyRadiko が起動されました
 echo ウィンドウが表示されない場合は、タスクバーを確認してください

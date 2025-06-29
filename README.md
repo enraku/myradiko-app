@@ -202,13 +202,13 @@ npm run electron:build:portable
 MyRadiko.bat
 
 # または直接実行ファイルを起動
-MyRadiko.exe
+"dist-electron\MyRadiko 1.0.0.exe"
 ```
 
 **ビルド成果物:**
-- `MyRadiko.exe` - メイン実行ファイル（約180MB）
+- `dist-electron/MyRadiko 1.0.0.exe` - メイン実行ファイル（約180MB）
 - 各種DLLとリソースファイル
-- `MyRadiko.bat` - 実行ファイル起動用スクリプト
+- `MyRadiko.bat` - 実行ファイル起動用スクリプト（自動でパス検索）
 
 **付属ファイル:**
 - `start.bat` - 開発モード起動スクリプト（Node.js環境用）
