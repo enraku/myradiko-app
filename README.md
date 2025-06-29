@@ -70,7 +70,16 @@ MyRadikoは、radikoの番組を録音・管理するためのWindows用デス�
 
 #### 🚀 クイックスタート
 
-**方法1: 実行ファイルをビルドして使用（推奨）**
+**方法1: 簡単起動（推奨）**
+```cmd
+git clone https://github.com/enraku/myradiko-app.git
+cd myradiko-app
+npm install
+MyRadiko.bat
+```
+> 初回実行時に自動でビルドオプションが表示されます
+
+**方法2: 手動ビルド**
 ```cmd
 git clone https://github.com/enraku/myradiko-app.git
 cd myradiko-app
@@ -79,7 +88,7 @@ npm run electron:build:portable
 MyRadiko.bat
 ```
 
-**方法2: 開発モード（Node.js環境）**
+**方法3: 開発モード（Node.js環境）**
 ```cmd
 git clone https://github.com/enraku/myradiko-app.git
 cd myradiko-app
