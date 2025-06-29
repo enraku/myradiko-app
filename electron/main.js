@@ -47,8 +47,9 @@ function startServer() {
     });
 
     serverProcess.stdout.on('data', (data) => {
-      console.log(`Server: ${data}`);
-      if (data.toString().includes('MyRadiko Server is running')) {
+      const output = data.toString();
+      console.log(`Server stdout: ${output}`);
+      if (output.includes('MyRadiko Server is running') || output.includes('Server running on port')) {
         console.log('Server started successfully');
         resolve();
       }
@@ -143,18 +144,89 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     
-    // 開発モードではDevToolsを開く
-    if (isDev) {
-      mainWindow.webContents.openDevTools();
-    }
+    // デバッグのため DevTools を常に開く（一時的）
+    mainWindow.webContents.openDevTools();
   });
 
   // アプリケーションのロード
-  const startUrl = isDev 
-    ? `http://localhost:${CLIENT_PORT}` 
-    : `http://localhost:${SERVER_PORT}`;
+  let startUrl;
+  if (isDev) {
+    startUrl = `http://localhost:${CLIENT_PORT}`;
+  } else {
+    // 本番環境：サーバーが起動していればサーバー経由、そうでなければローカルファイル
+    const clientDistPath = path.join(__dirname, '../client/dist/index.html');
+    if (serverProcess) {
+      startUrl = `http://localhost:${SERVER_PORT}`;
+    } else {
+      startUrl = `file://${clientDistPath}`;
+    }
+  }
     
+  console.log('Loading URL:', startUrl);
+  console.log('Server process exists:', !!serverProcess);
+  
   mainWindow.loadURL(startUrl);
+  
+  // ロードエラーの監視
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('Failed to load:', validatedURL);
+    console.error('Error:', errorCode, errorDescription);
+    
+    // エラーページを表示
+    const errorHtml = `
+      <html>
+        <head>
+          <title>MyRadiko - 接続エラー</title>
+          <style>
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              padding: 40px; 
+              background: #f5f5f5;
+              margin: 0;
+            }
+            .container {
+              max-width: 600px;
+              margin: 0 auto;
+              background: white;
+              padding: 30px;
+              border-radius: 8px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            h1 { color: #d32f2f; }
+            .error-code { background: #ffebee; padding: 10px; border-radius: 4px; }
+            .retry-btn { 
+              background: #1976d2; 
+              color: white; 
+              border: none; 
+              padding: 10px 20px; 
+              border-radius: 4px; 
+              cursor: pointer; 
+              margin-top: 15px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🔌 サーバー接続エラー</h1>
+            <p>MyRadikoサーバーに接続できませんでした。</p>
+            <div class="error-code">
+              <strong>エラーコード:</strong> ${errorCode}<br>
+              <strong>詳細:</strong> ${errorDescription}<br>
+              <strong>URL:</strong> ${validatedURL}
+            </div>
+            <h3>💡 対処法</h3>
+            <ul>
+              <li>開発モード（start.bat）で起動してみてください</li>
+              <li>ファイアウォールやセキュリティソフトをチェック</li>
+              <li>ポート ${SERVER_PORT} が他のアプリケーションに使用されていないか確認</li>
+            </ul>
+            <button class="retry-btn" onclick="location.reload()">🔄 再読み込み</button>
+          </div>
+        </body>
+      </html>
+    `;
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`);
+  });
 
   // ウィンドウが閉じられる時の処理
   mainWindow.on('close', (event) => {
