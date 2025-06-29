@@ -180,6 +180,10 @@ npm run electron:build:msi      # MSIインストーラー作成
 npm run electron:build:all      # 全インストーラー形式作成
 npm run electron:pack           # パッケージ作成
 npm run electron:dist           # 配布用パッケージ作成
+
+# 自動ビルドインストーラー関連
+npm run setup:nsis              # NSIS環境セットアップ（初回のみ）
+npm run build:installer         # 自動ダウンロード・ビルドインストーラー作成
 ```
 
 #### 🔧 実行ファイルのビルド詳細
@@ -346,6 +350,42 @@ myradiko-app/
 1. アプリ内のログシステム
 2. ブラウザの開発者コンソール
 3. サーバーのコンソール出力
+
+## 🚀 自動ダウンロード・ビルドインストーラー
+
+**特徴:**
+- Node.js、Git を自動インストール
+- ソースコードを自動ダウンロード
+- 依存関係を自動インストール
+- アプリケーションを自動ビルド
+- アンインストーラー付き
+
+**前提条件:**
+- Windows 10/11 (64bit)
+- NSIS (Nullsoft Scriptable Install System)
+
+**ビルド手順:**
+```cmd
+# 1. NSIS環境セットアップ（初回のみ）
+npm run setup:nsis
+
+# 2. インストーラーをビルド
+npm run build:installer
+```
+
+**作成されるファイル:**
+- `MyRadiko-Setup-v1.0.0.exe` - 自動ビルドインストーラー
+
+**インストーラーの機能:**
+- ✅ Node.js LTS 自動インストール
+- ✅ Git for Windows 自動インストール  
+- ✅ ソースコード自動ダウンロード
+- ✅ 依存関係自動インストール
+- ✅ アプリケーション自動ビルド
+- ✅ デスクトップ・スタートメニューショートカット作成
+- ✅ Windows プログラムと機能に登録
+- ✅ 完全アンインストーラー付き
+- ✅ ユーザーデータ保持オプション
 
 ---
 
