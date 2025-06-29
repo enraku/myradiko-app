@@ -6,12 +6,13 @@ on:
       - 'v*'
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    name: Create Release
+  build-windows-installers:
+    runs-on: windows-latest
+    name: Build Windows Installers
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -26,52 +27,84 @@ jobs:
       working-directory: ./client
       run: npm ci
     
-    - name: Build frontend
-      working-directory: ./client
-      run: npm run build
-    
-    - name: Create release package
-      run: |
-        mkdir -p release
-        cp -r server release/
-        cp -r client/dist release/client
-        cp -r data release/
-        cp package.json package-lock.json README.md release/
-        cd release && tar -czf ../myradiko-${{ github.ref_name }}.tar.gz .
+    - name: Build all installers
+      run: npm run electron:build:all
     
     - name: Create Release
+      id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: MyRadiko ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
+        release_name: MyRadiko ${{ github.ref_name }}
         body: |
-          ## 新機能・改善
-          - 番組表表示と検索機能
-          - 録音予約システム
-          - ファイル管理機能
-          - 設定システム
-          - ログ機能
+          # MyRadiko ${{ github.ref_name }} - Windows Desktop Application
           
-          ## インストール方法
-          1. アーカイブをダウンロード・展開
-          2. `npm install`でバックエンド依存関係をインストール
-          3. `npm run init-db`でデータベースを初期化
-          4. `npm start`でサーバーを起動
+          radikoの番組を録音・管理するためのWindows用デスクトップアプリケーションです。
           
-          ## 注意事項
-          - Node.js v16以上が必要です
+          ## 📦 ダウンロード
+          
+          **推奨**: NSISインストーラー（`MyRadiko-Setup-${{ github.ref_name }}.exe`）
+          - 標準的なWindowsインストーラー
+          - デスクトップショートカット自動作成
+          - スタートメニュー登録
+          - 簡単アンインストール
+          
+          **企業環境**: MSIインストーラー（`MyRadiko-${{ github.ref_name }}.msi`）
+          - 企業環境での一括展開に適用
+          - グループポリシーでの管理が可能
+          
+          **ポータブル**: 実行ファイル（`MyRadiko-Portable-${{ github.ref_name }}.exe`）
+          - インストール不要
+          - USBメモリなどで持ち運び可能
+          
+          ## ✨ 主要機能
+          - 📻 番組表表示（1週間先まで）
+          - 🎵 録音予約システム
+          - 📅 予約管理（繰り返し予約対応）
+          - 🎧 ファイル管理・再生
+          - ⚙️ 詳細設定システム
+          - 📋 ログ・履歴管理
+          
+          ## 🚀 使用方法
+          1. お好みのインストーラーをダウンロード
+          2. インストーラーを実行してインストール
+          3. デスクトップまたはスタートメニューから起動
+          
+          ## ⚠️ 注意事項
+          - Windows 10/11 (64bit) 専用
           - radikoの利用規約に従ってご使用ください
+          - 個人利用目的のみ
         draft: false
         prerelease: false
     
-    - name: Upload Release Asset
+    - name: Upload NSIS Installer
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./myradiko-${{ github.ref_name }}.tar.gz
-        asset_name: myradiko-${{ github.ref_name }}.tar.gz
-        asset_content_type: application/gzip
+        asset_path: ./dist-electron/MyRadiko Setup 1.0.0.exe
+        asset_name: MyRadiko-Setup-${{ github.ref_name }}.exe
+        asset_content_type: application/octet-stream
+    
+    - name: Upload MSI Installer
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist-electron/MyRadiko 1.0.0.msi
+        asset_name: MyRadiko-${{ github.ref_name }}.msi
+        asset_content_type: application/x-msi
+    
+    - name: Upload Portable Executable
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist-electron/MyRadiko 1.0.0.exe
+        asset_name: MyRadiko-Portable-${{ github.ref_name }}.exe
+        asset_content_type: application/octet-stream
