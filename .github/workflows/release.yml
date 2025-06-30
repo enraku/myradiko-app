@@ -27,88 +27,8 @@ jobs:
       working-directory: ./client
       run: npm ci
     
-    - name: Install NSIS
-      run: |
-        # NSIS をインストール
-        choco install nsis -y
-        # パスを更新
-        $env:PATH += ";C:\Program Files (x86)\NSIS"
-        echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-    
-    - name: Install NSIS plugins
-      run: |
-        # 必要なNSISプラグインをインストール
-        $nsisDir = "C:\Program Files (x86)\NSIS"
-        $pluginsDir = "$nsisDir\Plugins\x86-unicode"
-        $includeDir = "$nsisDir\Include"
-        
-        # ディレクトリ存在確認
-        if (!(Test-Path $pluginsDir)) {
-          Write-Host "Creating plugins directory: $pluginsDir"
-          New-Item -ItemType Directory -Path $pluginsDir -Force
-        }
-        if (!(Test-Path $includeDir)) {
-          Write-Host "Creating include directory: $includeDir"
-          New-Item -ItemType Directory -Path $includeDir -Force
-        }
-        
-        try {
-          # inetc プラグイン
-          Write-Host "Downloading inetc plugin..."
-          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip" -OutFile "$env:TEMP\inetc.zip" -ErrorAction Stop
-          Expand-Archive -Path "$env:TEMP\inetc.zip" -DestinationPath "$env:TEMP\inetc" -Force
-          if (Test-Path "$env:TEMP\inetc\Plugins\x86-unicode\inetc.dll") {
-            Copy-Item "$env:TEMP\inetc\Plugins\x86-unicode\inetc.dll" -Destination $pluginsDir -Force
-            Write-Host "inetc.dll installed successfully"
-          }
-        } catch {
-          Write-Host "Warning: Failed to install inetc plugin: $_"
-        }
-        
-        try {
-          # nsisunz プラグイン
-          Write-Host "Downloading nsisunz plugin..."
-          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5a/Nsisunz.zip" -OutFile "$env:TEMP\nsisunz.zip" -ErrorAction Stop
-          Expand-Archive -Path "$env:TEMP\nsisunz.zip" -DestinationPath "$env:TEMP\nsisunz" -Force
-          if (Test-Path "$env:TEMP\nsisunz\Plugin\nsisunz.dll") {
-            Copy-Item "$env:TEMP\nsisunz\Plugin\nsisunz.dll" -Destination $pluginsDir -Force
-            Write-Host "nsisunz.dll installed successfully"
-          }
-          if (Test-Path "$env:TEMP\nsisunz\nsisunz.nsh") {
-            Copy-Item "$env:TEMP\nsisunz\nsisunz.nsh" -Destination $includeDir -Force
-            Write-Host "nsisunz.nsh installed successfully"
-          }
-        } catch {
-          Write-Host "Warning: Failed to install nsisunz plugin: $_"
-        }
-        
-        try {
-          # GetSize プラグイン
-          Write-Host "Downloading GetSize plugin..."
-          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5e/GetSize.zip" -OutFile "$env:TEMP\getsize.zip" -ErrorAction Stop
-          Expand-Archive -Path "$env:TEMP\getsize.zip" -DestinationPath "$env:TEMP\getsize" -Force
-          if (Test-Path "$env:TEMP\getsize\GetSize.nsh") {
-            Copy-Item "$env:TEMP\getsize\GetSize.nsh" -Destination $includeDir -Force
-            Write-Host "GetSize.nsh installed successfully"
-          }
-        } catch {
-          Write-Host "Warning: Failed to install GetSize plugin: $_"
-        }
-    
     - name: Build Electron installers
-      run: npm run electron:build:all
-    
-    - name: Build NSIS auto-installer
-      run: |
-        cd installer
-        makensis Simple-Installer.nsi
-        # Move installer to root directory for easier upload
-        if (Test-Path "MyRadiko-Setup-v1.0.0.exe") {
-          Move-Item "MyRadiko-Setup-v1.0.0.exe" "../MyRadiko-Setup-v1.0.0.exe"
-          Write-Host "Auto-installer moved to root directory"
-        } else {
-          Write-Host "Warning: Auto-installer not found, continuing without it"
-        }
+      run: npm run electron:build:nsis
     
     - name: Create Release
       id: create_release
@@ -125,25 +45,11 @@ jobs:
           
           ## 📦 ダウンロード
           
-          **🌟 自動ビルドインストーラー（推奨）**: `MyRadiko-AutoInstaller-${{ github.ref_name }}.exe`
-          - 🚀 **完全自動化** - Node.js、Git、依存関係、ビルドまで全自動
-          - 💾 **単体ファイル** - このファイル1つで完全インストール
-          - 🛠️ **技術知識不要** - 実行するだけで使用可能
-          - 🗑️ **完全アンインストール** - データ保持オプション付き
-          
-          **標準**: NSISインストーラー（`MyRadiko-Setup-${{ github.ref_name }}.exe`）
+          **推奨**: NSISインストーラー（`MyRadiko-Setup-${{ github.ref_name }}.exe`）
           - 標準的なWindowsインストーラー（事前ビルド済み）
           - デスクトップショートカット自動作成
           - スタートメニュー登録
           - 簡単アンインストール
-          
-          **企業環境**: MSIインストーラー（`MyRadiko-${{ github.ref_name }}.msi`）
-          - 企業環境での一括展開に適用
-          - グループポリシーでの管理が可能
-          
-          **ポータブル**: 実行ファイル（`MyRadiko-Portable-${{ github.ref_name }}.exe`）
-          - インストール不要
-          - USBメモリなどで持ち運び可能
           
           ## ✨ 主要機能
           - 📻 番組表表示（1週間先まで）
@@ -165,17 +71,6 @@ jobs:
         draft: false
         prerelease: false
     
-    - name: Upload Auto-Build Installer
-      if: ${{ hashFiles('./MyRadiko-Setup-v1.0.0.exe') != '' }}
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./MyRadiko-Setup-v1.0.0.exe
-        asset_name: MyRadiko-AutoInstaller-${{ github.ref_name }}.exe
-        asset_content_type: application/octet-stream
-    
     - name: Upload NSIS Installer
       uses: actions/upload-release-asset@v1
       env:
@@ -184,24 +79,4 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dist-electron/MyRadiko Setup 1.0.0.exe
         asset_name: MyRadiko-Setup-${{ github.ref_name }}.exe
-        asset_content_type: application/octet-stream
-    
-    - name: Upload MSI Installer
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist-electron/MyRadiko 1.0.0.msi
-        asset_name: MyRadiko-${{ github.ref_name }}.msi
-        asset_content_type: application/x-msi
-    
-    - name: Upload Portable Executable
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist-electron/MyRadiko 1.0.0.exe
-        asset_name: MyRadiko-Portable-${{ github.ref_name }}.exe
         asset_content_type: application/octet-stream
