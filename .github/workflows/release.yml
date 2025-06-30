@@ -42,21 +42,58 @@ jobs:
         $pluginsDir = "$nsisDir\Plugins\x86-unicode"
         $includeDir = "$nsisDir\Include"
         
-        # inetc プラグイン
-        Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip" -OutFile "$env:TEMP\inetc.zip"
-        Expand-Archive -Path "$env:TEMP\inetc.zip" -DestinationPath "$env:TEMP\inetc" -Force
-        Copy-Item "$env:TEMP\inetc\Plugins\x86-unicode\inetc.dll" -Destination $pluginsDir -Force
+        # ディレクトリ存在確認
+        if (!(Test-Path $pluginsDir)) {
+          Write-Host "Creating plugins directory: $pluginsDir"
+          New-Item -ItemType Directory -Path $pluginsDir -Force
+        }
+        if (!(Test-Path $includeDir)) {
+          Write-Host "Creating include directory: $includeDir"
+          New-Item -ItemType Directory -Path $includeDir -Force
+        }
         
-        # nsisunz プラグイン
-        Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5a/Nsisunz.zip" -OutFile "$env:TEMP\nsisunz.zip"
-        Expand-Archive -Path "$env:TEMP\nsisunz.zip" -DestinationPath "$env:TEMP\nsisunz" -Force
-        Copy-Item "$env:TEMP\nsisunz\Plugin\nsisunz.dll" -Destination $pluginsDir -Force
-        Copy-Item "$env:TEMP\nsisunz\nsisunz.nsh" -Destination $includeDir -Force
+        try {
+          # inetc プラグイン
+          Write-Host "Downloading inetc plugin..."
+          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/c/c9/Inetc.zip" -OutFile "$env:TEMP\inetc.zip" -ErrorAction Stop
+          Expand-Archive -Path "$env:TEMP\inetc.zip" -DestinationPath "$env:TEMP\inetc" -Force
+          if (Test-Path "$env:TEMP\inetc\Plugins\x86-unicode\inetc.dll") {
+            Copy-Item "$env:TEMP\inetc\Plugins\x86-unicode\inetc.dll" -Destination $pluginsDir -Force
+            Write-Host "inetc.dll installed successfully"
+          }
+        } catch {
+          Write-Host "Warning: Failed to install inetc plugin: $_"
+        }
         
-        # GetSize プラグイン
-        Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5e/GetSize.zip" -OutFile "$env:TEMP\getsize.zip"
-        Expand-Archive -Path "$env:TEMP\getsize.zip" -DestinationPath "$env:TEMP\getsize" -Force
-        Copy-Item "$env:TEMP\getsize\GetSize.nsh" -Destination $includeDir -Force
+        try {
+          # nsisunz プラグイン
+          Write-Host "Downloading nsisunz plugin..."
+          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5a/Nsisunz.zip" -OutFile "$env:TEMP\nsisunz.zip" -ErrorAction Stop
+          Expand-Archive -Path "$env:TEMP\nsisunz.zip" -DestinationPath "$env:TEMP\nsisunz" -Force
+          if (Test-Path "$env:TEMP\nsisunz\Plugin\nsisunz.dll") {
+            Copy-Item "$env:TEMP\nsisunz\Plugin\nsisunz.dll" -Destination $pluginsDir -Force
+            Write-Host "nsisunz.dll installed successfully"
+          }
+          if (Test-Path "$env:TEMP\nsisunz\nsisunz.nsh") {
+            Copy-Item "$env:TEMP\nsisunz\nsisunz.nsh" -Destination $includeDir -Force
+            Write-Host "nsisunz.nsh installed successfully"
+          }
+        } catch {
+          Write-Host "Warning: Failed to install nsisunz plugin: $_"
+        }
+        
+        try {
+          # GetSize プラグイン
+          Write-Host "Downloading GetSize plugin..."
+          Invoke-WebRequest -Uri "https://nsis.sourceforge.io/mediawiki/images/5/5e/GetSize.zip" -OutFile "$env:TEMP\getsize.zip" -ErrorAction Stop
+          Expand-Archive -Path "$env:TEMP\getsize.zip" -DestinationPath "$env:TEMP\getsize" -Force
+          if (Test-Path "$env:TEMP\getsize\GetSize.nsh") {
+            Copy-Item "$env:TEMP\getsize\GetSize.nsh" -Destination $includeDir -Force
+            Write-Host "GetSize.nsh installed successfully"
+          }
+        } catch {
+          Write-Host "Warning: Failed to install GetSize plugin: $_"
+        }
     
     - name: Build Electron installers
       run: npm run electron:build:all
@@ -64,11 +101,13 @@ jobs:
     - name: Build NSIS auto-installer
       run: |
         cd installer
-        makensis MyRadiko-Installer.nsi
+        makensis Simple-Installer.nsi
         # Move installer to root directory for easier upload
         if (Test-Path "MyRadiko-Setup-v1.0.0.exe") {
           Move-Item "MyRadiko-Setup-v1.0.0.exe" "../MyRadiko-Setup-v1.0.0.exe"
           Write-Host "Auto-installer moved to root directory"
+        } else {
+          Write-Host "Warning: Auto-installer not found, continuing without it"
         }
     
     - name: Create Release
@@ -127,6 +166,7 @@ jobs:
         prerelease: false
     
     - name: Upload Auto-Build Installer
+      if: ${{ hashFiles('./MyRadiko-Setup-v1.0.0.exe') != '' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
