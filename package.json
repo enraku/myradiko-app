@@ -26,15 +26,8 @@
     "postinstall": "cd client && npm install",
     "electron": "npx electron .",
     "electron:dev": "concurrently \"npm run client\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .\"",
-    "electron:pack": "npm run build && npx electron-builder",
-    "electron:dist": "npm run build && npx electron-builder --publish=never",
-    "electron:build": "npm run build && npx electron-builder --win",
-    "electron:build:portable": "npm run build && npx electron-builder --win portable",
-    "electron:build:nsis": "npm run build && npx electron-builder --win nsis",
-    "electron:build:msi": "npm run build && npx electron-builder --win msi",
-    "electron:build:all": "npm run build && npx electron-builder --win",
-    "build:installer": "build-installer.bat",
-    "setup:nsis": "install-nsis-plugins.bat"
+    "electron:build": "npm run build && npx electron-builder --win nsis",
+    "electron:pack": "npm run build && npx electron-builder"
   },
   "keywords": [
     "radiko",
@@ -87,46 +80,17 @@
       }
     ],
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "msi",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
-      ],
+      "target": {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
       "requestedExecutionLevel": "asInvoker"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "electron/assets/icon.icns",
-      "category": "public.app-category.entertainment"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "electron/assets/icon.png",
-      "category": "AudioVideo"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "MyRadiko",
-      "runAfterFinish": true,
-      "menuCategory": "ラジオ・メディア"
-    },
-    "msi": {
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "menuCategory": "ラジオ・メディア",
-      "shortcutName": "MyRadiko"
+      "createStartMenuShortcut": true
     }
   }
 }

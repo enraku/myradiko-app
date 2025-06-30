@@ -6,9 +6,9 @@ on:
       - 'v*'
 
 jobs:
-  build-windows-installers:
+  build-and-release:
     runs-on: windows-latest
-    name: Build Windows Installers
+    name: Build Windows Installer
     
     steps:
     - name: Checkout code
@@ -29,12 +29,10 @@ jobs:
     
     - name: Build frontend
       working-directory: ./client
-      env:
-        NODE_OPTIONS: "--max-old-space-size=4096"
       run: npm run build
       
-    - name: Build Electron installers
-      run: npm run electron:build:nsis
+    - name: Build Electron installer
+      run: npm run electron:build
     
     - name: Create Release and Upload Assets
       uses: softprops/action-gh-release@v2
@@ -49,8 +47,8 @@ jobs:
           
           ## 📦 ダウンロード
           
-          **推奨**: NSISインストーラー（`MyRadiko-Setup-${{ github.ref_name }}.exe`）
-          - 標準的なWindowsインストーラー（事前ビルド済み）
+          **MyRadiko-Setup-${{ github.ref_name }}.exe** - Windowsインストーラー
+          - 標準的なWindowsインストーラー
           - デスクトップショートカット自動作成
           - スタートメニュー登録
           - 簡単アンインストール
@@ -73,6 +71,6 @@ jobs:
           - radikoの利用規約に従ってご使用ください
           - 個人利用目的のみ
         files: |
-          ./dist-electron/MyRadiko Setup 1.0.0.exe
+          ./dist-electron/MyRadiko Setup *.exe
         draft: false
         prerelease: false
