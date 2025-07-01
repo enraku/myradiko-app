@@ -34,16 +34,39 @@ function startServer() {
   return new Promise((resolve, reject) => {
     console.log('Starting MyRadiko server...');
     
-    // パッケージ化された環境での Node.js パス取得
-    const nodeExecutable = process.execPath;
-    const serverPath = path.join(__dirname, '../server/app.js');
+    // パッケージ化された環境では、内蔵のNode.jsを使用
+    const isPackaged = app.isPackaged;
+    let nodeExecutable, serverPath, workingDir;
     
+    if (isPackaged) {
+      // パッケージ化された環境では、サーバーを直接require()で起動
+      try {
+        const serverApp = require(path.join(__dirname, '../server/app.js'));
+        console.log('Server started via require in packaged environment');
+        resolve();
+        return;
+      } catch (error) {
+        console.error('Failed to start server via require:', error);
+        // フォールバックとして通常の方法を試す
+        nodeExecutable = process.execPath;
+        serverPath = path.join(__dirname, '../server/app.js');
+        workingDir = path.join(__dirname, '..');
+      }
+    } else {
+      // 開発環境
+      nodeExecutable = 'node';
+      serverPath = path.join(__dirname, '../server/app.js');
+      workingDir = path.join(__dirname, '..');
+    }
+    
+    console.log('Is packaged:', isPackaged);
     console.log('Node executable:', nodeExecutable);
     console.log('Server path:', serverPath);
+    console.log('Working directory:', workingDir);
     
     serverProcess = spawn(nodeExecutable, [serverPath], {
       stdio: 'pipe',
-      cwd: path.join(__dirname, '..')
+      cwd: workingDir
     });
 
     serverProcess.stdout.on('data', (data) => {
