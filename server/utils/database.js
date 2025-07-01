@@ -1,4 +1,4 @@
-const MyRadikoDatabase = require('../models/Database');
+const Database = require('../models/Database');
 
 // シングルトンインスタンス
 let db = null;
@@ -8,7 +8,7 @@ const getDatabase = async () => {
   if (!db && !isConnecting) {
     isConnecting = true;
     try {
-      db = new MyRadikoDatabase();
+      db = new Database();
       await db.connect();
       console.log('Database connection established (singleton)');
     } catch (error) {

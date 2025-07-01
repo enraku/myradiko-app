@@ -1,8 +1,8 @@
-const Database = require('better-sqlite3');
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-class MyRadikoDatabase {
+class Database {
     constructor() {
         // パッケージ化環境対応: 書き込み可能なディレクトリを使用
         const isElectron = process.versions.electron !== undefined;
@@ -42,14 +42,22 @@ class MyRadikoDatabase {
     }
 
     async connect() {
-        try {
-            this.db = new Database(this.dbPath);
-            // better-sqlite3は同期的に接続するためエラーがなければ成功
-            console.log('Connected to SQLite database with better-sqlite3');
-        } catch (error) {
-            console.error('Failed to connect to database:', error);
-            throw error;
-        }
+        return new Promise((resolve, reject) => {
+            // Electron環境での対策: verboseを無効化
+            const sqliteOptions = process.versions.electron ? 
+                sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE :
+                sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE;
+            
+            this.db = new sqlite3.Database(this.dbPath, sqliteOptions, (err) => {
+                if (err) {
+                    console.error('Database connection error:', err);
+                    reject(err);
+                } else {
+                    console.log('Connected to SQLite database');
+                    resolve();
+                }
+            });
+        });
     }
 
     async initialize() {
@@ -73,21 +81,25 @@ class MyRadikoDatabase {
         console.log('Loading init.sql from:', initSqlPath);
         const initSql = fs.readFileSync(initSqlPath, 'utf8');
         
-        try {
-            this.db.exec(initSql);
-            console.log('Database initialized successfully');
-            
-            // パッケージ化環境の場合、録音パスを適切に設定
-            try {
-                await this.updateRecordingPathForElectron();
-            } catch (error) {
-                console.error('Failed to update recording path:', error);
-                // エラーでも継続
-            }
-        } catch (error) {
-            console.error('Database initialization failed:', error);
-            throw error;
-        }
+        return new Promise((resolve, reject) => {
+            this.db.exec(initSql, async (err) => {
+                if (err) {
+                    console.error('Database initialization failed:', err);
+                    reject(err);
+                } else {
+                    console.log('Database initialized successfully');
+                    
+                    // パッケージ化環境の場合、録音パスを適切に設定
+                    try {
+                        await this.updateRecordingPathForElectron();
+                        resolve();
+                    } catch (error) {
+                        console.error('Failed to update recording path:', error);
+                        resolve(); // エラーでも継続
+                    }
+                }
+            });
+        });
     }
     
     async updateRecordingPathForElectron() {
@@ -95,61 +107,76 @@ class MyRadikoDatabase {
         if (isElectron && this.recordingsDir) {
             // Electron環境の場合、録音パスを適切なディレクトリに更新
             const updateSql = `UPDATE settings SET value = ? WHERE key = 'recording_path'`;
-            try {
-                const stmt = this.db.prepare(updateSql);
-                stmt.run(this.recordingsDir);
-                console.log('Recording path updated for Electron environment:', this.recordingsDir);
-            } catch (error) {
-                console.error('Failed to update recording path:', error);
-                throw error;
-            }
+            return new Promise((resolve, reject) => {
+                this.db.run(updateSql, [this.recordingsDir], (err) => {
+                    if (err) {
+                        console.error('Failed to update recording path:', err);
+                        reject(err);
+                    } else {
+                        console.log('Recording path updated for Electron environment:', this.recordingsDir);
+                        resolve();
+                    }
+                });
+            });
         }
     }
 
     async run(sql, params = []) {
-        try {
-            const stmt = this.db.prepare(sql);
-            const result = stmt.run(params);
-            return { id: result.lastInsertRowid, changes: result.changes };
-        } catch (error) {
-            console.error('Database run error:', error);
-            throw error;
-        }
+        return new Promise((resolve, reject) => {
+            this.db.run(sql, params, function(err) {
+                if (err) {
+                    console.error('Database run error:', err);
+                    reject(err);
+                } else {
+                    resolve({ id: this.lastID, changes: this.changes });
+                }
+            });
+        });
     }
 
     async get(sql, params = []) {
-        try {
-            const stmt = this.db.prepare(sql);
-            const result = stmt.get(params);
-            return result;
-        } catch (error) {
-            console.error('Database get error:', error);
-            throw error;
-        }
+        return new Promise((resolve, reject) => {
+            this.db.get(sql, params, (err, row) => {
+                if (err) {
+                    console.error('Database get error:', err);
+                    reject(err);
+                } else {
+                    resolve(row);
+                }
+            });
+        });
     }
 
     async all(sql, params = []) {
-        try {
-            const stmt = this.db.prepare(sql);
-            const results = stmt.all(params);
-            return results;
-        } catch (error) {
-            console.error('Database all error:', error);
-            throw error;
-        }
+        return new Promise((resolve, reject) => {
+            this.db.all(sql, params, (err, rows) => {
+                if (err) {
+                    console.error('Database all error:', err);
+                    reject(err);
+                } else {
+                    resolve(rows);
+                }
+            });
+        });
     }
 
     async close() {
-        try {
+        return new Promise((resolve, reject) => {
             if (this.db) {
-                this.db.close();
-                console.log('Database connection closed');
+                this.db.close((err) => {
+                    if (err) {
+                        console.error('Error closing database:', err);
+                        reject(err);
+                    } else {
+                        console.log('Database connection closed');
+                        resolve();
+                    }
+                });
+            } else {
+                resolve();
             }
-        } catch (error) {
-            console.error('Error closing database:', error);
-            throw error;
-        }
+        });
     }
 }
 
-module.exports = MyRadikoDatabase;
+module.exports = Database;

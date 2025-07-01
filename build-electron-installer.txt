@@ -1,0 +1,57 @@
+Run npm run electron:build
+
+> myradiko@1.1.7 electron:build
+> npm run build && npx electron-builder --win nsis --publish never
+
+
+> myradiko@1.1.7 build
+> cd client && npm run build
+
+
+> myradiko-client@1.0.0 build
+> vite build
+
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+vite v5.4.19 building for production...
+transforming...
+✓ 101 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.59 kB │ gzip:  0.41 kB
+dist/assets/index-DBuT3JTI.css   49.33 kB │ gzip:  8.22 kB
+dist/assets/index-CSjYpy1N.js   218.80 kB │ gzip: 75.32 kB
+✓ built in 1.83s
+  • electron-builder  version=25.1.8 os=10.0.20348
+  • loaded configuration  file=package.json ("build" field)
+  • executing @electron/rebuild  electronVersion=32.2.6 arch=x64 buildFromSource=false appDir=./
+  • installing native dependencies  arch=x64
+  • preparing       moduleName=better-sqlite3 arch=x64
+  ⨯ 
+  copy_builtin_sqlite3
+  sqlite3.c
+  win_delay_load_hook.cc
+  sqlite3.vcxproj -> D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3\build\Release\\sqlite3.lib
+cl : command line  warning D9025: overriding '/std:c++20' with '/std:c++17' [D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+  better_sqlite3.cpp
+C:\Users\runneradmin\.electron-gyp\32.2.6\include\node\v8config.h(13,1): error C1189: #error:  "C++20 or later required." [D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+  (compiling source file '../src/better_sqlite3.cpp')
+  
+  test_extension.c
+  win_delay_load_hook.cc
+     Creating library D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3\build\Release\test_extension.lib and object D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3\build\Release\test_extension.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 3 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  test_extension.vcxproj -> D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3\build\Release\\test_extension.node
+Error: `C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe` failed with exit code: 1
+    at ChildProcess.onExit (D:\a\myradiko-app\myradiko-app\node_modules\@electron\rebuild\node_modules\node-gyp\lib\build.js:203:23)
+    at ChildProcess.emit (node:events:517:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:292:12)
+
+
+  ⨯ node-gyp failed to rebuild 'D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3'  failedTask=build stackTrace=Error: node-gyp failed to rebuild 'D:\a\myradiko-app\myradiko-app\node_modules\better-sqlite3'
+    at ChildProcess.<anonymous> (D:\a\myradiko-app\myradiko-app\node_modules\@electron\rebuild\lib\module-type\node-gyp\node-gyp.js:121:24)
+    at ChildProcess.emit (node:events:517:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:292:12)
+Error: Process completed with exit code 1.

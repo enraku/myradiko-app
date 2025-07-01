@@ -1,7 +1,7 @@
-const MyRadikoDatabase = require('../models/Database');
+const Database = require('../models/Database');
 
 async function initDatabase() {
-    const db = new MyRadikoDatabase();
+    const db = new Database();
     
     try {
         console.log('Initializing database...');
