@@ -16,18 +16,33 @@ const PORT = process.env.PORT || 3010;
 // Initialize recording scheduler
 const recordingScheduler = new RecordingScheduler();
 
+// Electron環境検出
+const isElectron = process.versions.electron !== undefined;
+console.log('🔍 Environment check:', {
+  isElectron,
+  nodeVersion: process.version,
+  electronVersion: process.versions.electron,
+  cwd: process.cwd(),
+  platform: process.platform
+});
+
 // Initialize database on startup
 initDatabase()
   .then(() => {
-    console.log('Database initialized successfully');
+    console.log('✅ Database initialized successfully');
     
     // Start recording scheduler after database initialization
     recordingScheduler.start();
-    console.log('Recording scheduler started');
+    console.log('✅ Recording scheduler started');
   })
   .catch((error) => {
-    console.error('Failed to initialize database:', error);
-    process.exit(1);
+    console.error('❌ Failed to initialize database:', error);
+    if (isElectron) {
+      console.log('🔄 Continuing in Electron environment without database...');
+      // Electron環境ではprocess.exitを避ける
+    } else {
+      process.exit(1);
+    }
   });
 
 // Middleware
@@ -56,11 +71,26 @@ app.get('*', (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`🚀 MyRadiko Server is running on port ${PORT}`);
-  console.log(`📡 API available at http://localhost:${PORT}/api`);
-  console.log(`🎵 Web app available at http://localhost:${PORT}`);
-});
+// Electron環境での安全なサーバー起動
+let server = null;
+try {
+  server = app.listen(PORT, () => {
+    console.log(`🚀 MyRadiko Server is running on port ${PORT}`);
+    console.log(`📡 API available at http://localhost:${PORT}/api`);
+    console.log(`🎵 Web app available at http://localhost:${PORT}`);
+    console.log('✅ Server startup completed successfully');
+  });
+  
+  server.on('error', (err) => {
+    console.error('❌ Server error:', err);
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use`);
+    }
+  });
+  
+} catch (error) {
+  console.error('❌ Failed to start server:', error);
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {

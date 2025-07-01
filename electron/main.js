@@ -33,39 +33,113 @@ let expressServer = null;
 
 function startServer() {
   return new Promise((resolve, reject) => {
-    console.log('Starting MyRadiko server in main process...');
+    console.log('🚀 Starting MyRadiko server in main process...');
+    console.log('📍 Process info:', {
+      platform: process.platform,
+      arch: process.arch,
+      nodeVersion: process.version,
+      electronVersion: process.versions.electron,
+      isPackaged: app.isPackaged,
+      cwd: process.cwd(),
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath()
+    });
     
     try {
-      // パス設定を適切に行う
+      // パス設定の詳細ログ
       const appPath = app.isPackaged ? 
         path.join(process.resourcesPath, 'app.asar') : 
         path.join(__dirname, '..');
       
-      console.log('App path:', appPath);
-      console.log('Is packaged:', app.isPackaged);
+      console.log('📂 Path analysis:', {
+        appPath,
+        serverPath: path.join(appPath, 'server', 'app.js'),
+        databasePath: path.join(appPath, 'database'),
+        exists: {
+          appPath: fs.existsSync(appPath),
+          serverPath: fs.existsSync(path.join(appPath, 'server', 'app.js')),
+          databasePath: fs.existsSync(path.join(appPath, 'database'))
+        }
+      });
+      
+      // ファイル構造確認
+      if (app.isPackaged) {
+        console.log('📁 Asar contents check...');
+        try {
+          const asarContents = fs.readdirSync(appPath);
+          console.log('📁 Asar root:', asarContents);
+          
+          if (fs.existsSync(path.join(appPath, 'server'))) {
+            const serverContents = fs.readdirSync(path.join(appPath, 'server'));
+            console.log('📁 Server folder:', serverContents);
+          }
+        } catch (fsError) {
+          console.error('❌ Filesystem check error:', fsError);
+        }
+      }
       
       // 作業ディレクトリを設定
+      console.log('🔄 Changing working directory...');
+      const originalCwd = process.cwd();
       process.chdir(appPath);
+      console.log('📍 Working directory changed:', {
+        from: originalCwd,
+        to: process.cwd()
+      });
       
       // 環境変数設定
       process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+      console.log('🌍 Environment variables:', {
+        NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT
+      });
       
       // サーバーアプリケーションを直接require
-      delete require.cache[require.resolve(path.join(appPath, 'server', 'app.js'))];
-      const serverApp = require(path.join(appPath, 'server', 'app.js'));
+      console.log('📦 Loading server application...');
+      const serverPath = path.join(appPath, 'server', 'app.js');
       
-      // Express サーバーが起動するまで少し待つ
-      setTimeout(() => {
-        console.log('Server started successfully in main process');
-        resolve();
-      }, 2000);
+      // require キャッシュクリア
+      delete require.cache[require.resolve(serverPath)];
+      console.log('🗑️ Cleared require cache for:', serverPath);
+      
+      // サーバー起動
+      console.log('⚡ Requiring server app...');
+      const serverApp = require(serverPath);
+      console.log('✅ Server app required successfully');
+      
+      // ポート使用状況確認
+      const net = require('net');
+      const server = net.createServer();
+      
+      server.listen(SERVER_PORT, () => {
+        console.log(`🔍 Port ${SERVER_PORT} is available`);
+        server.close(() => {
+          // Express サーバーが起動するまで少し待つ
+          setTimeout(() => {
+            console.log('✅ Server started successfully in main process');
+            resolve();
+          }, 3000); // 待機時間を延長
+        });
+      });
+      
+      server.on('error', (err) => {
+        console.error(`❌ Port ${SERVER_PORT} is busy:`, err);
+        server.close();
+        resolve(); // ポートが使用中でも続行
+      });
       
     } catch (error) {
-      console.error('Failed to start server in main process:', error);
-      console.error('Error stack:', error.stack);
+      console.error('❌ Failed to start server in main process:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
+        path: error.path
+      });
       
       // フォールバック: UIのみ表示
-      console.log('Continuing without server...');
+      console.log('🔄 Continuing without server...');
       resolve();
     }
   });
