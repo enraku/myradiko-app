@@ -68,30 +68,16 @@
       "electron/**/*",
       "server/**/*",
       "client/dist/**/*",
-      "data/**/*",
-      "recordings/**/*",
-      "node_modules/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "client/dist",
-        "to": "client/dist"
-      }
-    ],
     "win": {
-      "target": {
-        "target": "nsis",
-        "arch": ["x64"]
-      },
-      "requestedExecutionLevel": "asInvoker"
+      "target": "nsis",
+      "sign": false
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "artifactName": "${productName} Setup ${version}.${ext}"
+      "createStartMenuShortcut": true
     }
   }
 }
