@@ -53,9 +53,97 @@ function startServer() {
       console.log('📁 Client dist path:', clientDistPath);
       app.use(express.static(clientDistPath));
       
-      // 基本的なAPIエンドポイント
+      // APIモジュールをインライン実装
+      const axios = require('axios');
+      const xml2js = require('xml2js');
+      
+      // RadikoAPI基本機能を実装
+      const RadikoAPI = {
+        async getAllStations() {
+          const url = 'https://radiko.jp/v3/station/region/full.xml';
+          const response = await axios.get(url);
+          const parser = new xml2js.Parser();
+          const result = await parser.parseStringPromise(response.data);
+          
+          const stations = [];
+          if (result.regions && result.regions.region) {
+            for (const region of result.regions.region) {
+              if (region.station) {
+                for (const station of region.station) {
+                  stations.push({
+                    id: station.$.id,
+                    name: station.name[0],
+                    region: region.$.region_name,
+                    logo: station.logo ? station.logo[0] : null
+                  });
+                }
+              }
+            }
+          }
+          return stations;
+        },
+        
+        async getStationsByArea(areaCode = 'JP13') {
+          const url = `https://radiko.jp/v3/station/list/${areaCode}.xml`;
+          const response = await axios.get(url);
+          const parser = new xml2js.Parser();
+          const result = await parser.parseStringPromise(response.data);
+          
+          const stations = [];
+          if (result.stations && result.stations.station) {
+            for (const station of result.stations.station) {
+              stations.push({
+                id: station.$.id,
+                name: station.name[0],
+                ascii: station.ascii_name[0],
+                logo: station.logo ? station.logo[0] : null,
+                href: station.href ? station.href[0] : null
+              });
+            }
+          }
+          return stations;
+        },
+        
+        async getProgramsByDate(stationId, date) {
+          const url = `https://radiko.jp/v3/program/station/date/${date}/${stationId}.xml`;
+          const response = await axios.get(url);
+          const parser = new xml2js.Parser();
+          const result = await parser.parseStringPromise(response.data);
+          
+          const programs = [];
+          if (result.radiko && result.radiko.stations && result.radiko.stations[0].station) {
+            const station = result.radiko.stations[0].station[0];
+            
+            if (station.progs && station.progs[0] && station.progs[0].prog) {
+              station.progs[0].prog.forEach(prog => {
+                programs.push({
+                  id: prog.$.id,
+                  title: prog.title ? prog.title[0] : '',
+                  sub_title: prog.sub_title ? prog.sub_title[0] : '',
+                  desc: prog.desc ? prog.desc[0] : '',
+                  info: prog.info ? prog.info[0] : '',
+                  pfm: prog.pfm ? prog.pfm[0] : '',
+                  url: prog.url ? prog.url[0] : '',
+                  start_time: prog.$.ft,
+                  end_time: prog.$.to,
+                  duration: prog.$.dur,
+                  station_id: stationId,
+                  date: date
+                });
+              });
+            }
+          }
+          return programs;
+        }
+      };
+      
+      // API エンドポイント
       app.get('/api/health', (req, res) => {
-        res.json({ status: 'ok', message: 'MyRadiko server is running' });
+        res.json({ 
+          status: 'OK', 
+          message: 'MyRadiko API Server is running',
+          timestamp: new Date().toISOString()
+        });
       });
       
       app.get('/api/version', (req, res) => {
@@ -64,6 +152,70 @@ function startServer() {
           version: packageInfo.version,
           name: packageInfo.name 
         });
+      });
+      
+      // Stations API
+      app.get('/api/stations', async (req, res) => {
+        try {
+          console.log('Fetching all stations');
+          const stations = await RadikoAPI.getAllStations();
+          res.json({
+            success: true,
+            data: stations,
+            count: stations.length
+          });
+        } catch (error) {
+          console.error('Failed to fetch stations:', error.message);
+          res.status(500).json({
+            success: false,
+            error: 'Failed to fetch stations',
+            message: error.message
+          });
+        }
+      });
+      
+      app.get('/api/stations/:areaCode', async (req, res) => {
+        try {
+          const { areaCode } = req.params;
+          console.log(`Fetching stations for area: ${areaCode}`);
+          const stations = await RadikoAPI.getStationsByArea(areaCode);
+          res.json({
+            success: true,
+            data: stations,
+            count: stations.length
+          });
+        } catch (error) {
+          console.error('Failed to fetch stations by area:', error.message);
+          res.status(500).json({
+            success: false,
+            error: 'Failed to fetch stations by area',
+            message: error.message
+          });
+        }
+      });
+      
+      // Programs API
+      app.get('/api/programs/:stationId/date/:date', async (req, res) => {
+        try {
+          const { stationId, date } = req.params;
+          console.log(`Fetching programs for ${stationId} on ${date}`);
+          
+          const programs = await RadikoAPI.getProgramsByDate(stationId, date);
+          res.json({
+            success: true,
+            data: programs,
+            count: programs.length,
+            stationId: stationId,
+            date: date
+          });
+        } catch (error) {
+          console.error('Failed to fetch programs by date:', error);
+          res.status(500).json({
+            success: false,
+            error: 'Failed to fetch programs by date',
+            message: error.message
+          });
+        }
       });
       
       // SPA対応 - 全てのルートをindex.htmlにリダイレクト
