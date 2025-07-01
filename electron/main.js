@@ -92,13 +92,21 @@ function startServer() {
           const stations = [];
           if (result.stations && result.stations.station) {
             for (const station of result.stations.station) {
-              stations.push({
-                id: station.$.id,
-                name: station.name[0],
-                ascii: station.ascii_name[0],
-                logo: station.logo ? station.logo[0] : null,
-                href: station.href ? station.href[0] : null
-              });
+              try {
+                // XMLの構造: <id>TBS</id>、<name>TBSラジオ</name>という形式
+                const logoUrl = station.logo && station.logo.length > 0 ? station.logo[0] : null;
+                stations.push({
+                  id: station.id ? station.id[0] : 'unknown',
+                  name: station.name ? station.name[0] : 'Unknown Station',
+                  ascii: station.ascii_name ? station.ascii_name[0] : '',
+                  logo: logoUrl,
+                  href: station.href ? station.href[0] : null,
+                  areafree: station.areafree ? station.areafree[0] : '0',
+                  timefree: station.timefree ? station.timefree[0] : '0'
+                });
+              } catch (stationError) {
+                console.error('Error parsing station:', station, stationError);
+              }
             }
           }
           return stations;
@@ -218,9 +226,19 @@ function startServer() {
         }
       });
       
-      // SPA対応 - 全てのルートをindex.htmlにリダイレクト
+      // SPA対応 - APIルート以外を全てindex.htmlにリダイレクト
       app.get('*', (req, res) => {
-        res.sendFile(path.join(clientDistPath, 'index.html'));
+        // APIリクエストでない場合のみindex.htmlを返す
+        if (!req.path.startsWith('/api/')) {
+          res.sendFile(path.join(clientDistPath, 'index.html'));
+        } else {
+          // APIパスだが見つからない場合
+          res.status(404).json({
+            success: false,
+            error: 'API endpoint not found',
+            path: req.path
+          });
+        }
       });
       
       // サーバー起動
