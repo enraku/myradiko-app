@@ -34,111 +34,65 @@ let expressServer = null;
 function startServer() {
   return new Promise((resolve, reject) => {
     console.log('🚀 Starting MyRadiko server in main process...');
-    console.log('📍 Process info:', {
-      platform: process.platform,
-      arch: process.arch,
-      nodeVersion: process.version,
-      electronVersion: process.versions.electron,
-      isPackaged: app.isPackaged,
-      cwd: process.cwd(),
-      resourcesPath: process.resourcesPath,
-      appPath: app.getAppPath()
-    });
+    
+    // 静的ファイル提供のみの軽量サーバーを作成
+    const express = require('express');
+    const cors = require('cors');
+    
+    const app = express();
     
     try {
-      // パス設定の詳細ログ
-      const appPath = app.isPackaged ? 
-        path.join(process.resourcesPath, 'app.asar') : 
-        path.join(__dirname, '..');
+      console.log('📦 Creating embedded Express server...');
       
-      console.log('📂 Path analysis:', {
-        appPath,
-        serverPath: path.join(appPath, 'server', 'app.js'),
-        databasePath: path.join(appPath, 'database'),
-        exists: {
-          appPath: fs.existsSync(appPath),
-          serverPath: fs.existsSync(path.join(appPath, 'server', 'app.js')),
-          databasePath: fs.existsSync(path.join(appPath, 'database'))
-        }
+      // 基本ミドルウェア
+      app.use(cors());
+      app.use(express.json());
+      
+      // 静的ファイル配信（クライアント）
+      const clientDistPath = path.join(__dirname, '../client/dist');
+      console.log('📁 Client dist path:', clientDistPath);
+      app.use(express.static(clientDistPath));
+      
+      // 基本的なAPIエンドポイント
+      app.get('/api/health', (req, res) => {
+        res.json({ status: 'ok', message: 'MyRadiko server is running' });
       });
       
-      // ファイル構造確認
-      if (app.isPackaged) {
-        console.log('📁 Asar contents check...');
-        try {
-          const asarContents = fs.readdirSync(appPath);
-          console.log('📁 Asar root:', asarContents);
-          
-          if (fs.existsSync(path.join(appPath, 'server'))) {
-            const serverContents = fs.readdirSync(path.join(appPath, 'server'));
-            console.log('📁 Server folder:', serverContents);
-          }
-        } catch (fsError) {
-          console.error('❌ Filesystem check error:', fsError);
-        }
-      }
-      
-      // 作業ディレクトリを設定
-      console.log('🔄 Changing working directory...');
-      const originalCwd = process.cwd();
-      process.chdir(appPath);
-      console.log('📍 Working directory changed:', {
-        from: originalCwd,
-        to: process.cwd()
-      });
-      
-      // 環境変数設定
-      process.env.NODE_ENV = process.env.NODE_ENV || 'production';
-      console.log('🌍 Environment variables:', {
-        NODE_ENV: process.env.NODE_ENV,
-        PORT: process.env.PORT
-      });
-      
-      // サーバーアプリケーションを直接require
-      console.log('📦 Loading server application...');
-      const serverPath = path.join(appPath, 'server', 'app.js');
-      
-      // require キャッシュクリア
-      delete require.cache[require.resolve(serverPath)];
-      console.log('🗑️ Cleared require cache for:', serverPath);
-      
-      // サーバー起動
-      console.log('⚡ Requiring server app...');
-      const serverApp = require(serverPath);
-      console.log('✅ Server app required successfully');
-      
-      // ポート使用状況確認
-      const net = require('net');
-      const server = net.createServer();
-      
-      server.listen(SERVER_PORT, () => {
-        console.log(`🔍 Port ${SERVER_PORT} is available`);
-        server.close(() => {
-          // Express サーバーが起動するまで少し待つ
-          setTimeout(() => {
-            console.log('✅ Server started successfully in main process');
-            resolve();
-          }, 3000); // 待機時間を延長
+      app.get('/api/version', (req, res) => {
+        const packageInfo = require('../package.json');
+        res.json({ 
+          version: packageInfo.version,
+          name: packageInfo.name 
         });
       });
       
-      server.on('error', (err) => {
-        console.error(`❌ Port ${SERVER_PORT} is busy:`, err);
-        server.close();
-        resolve(); // ポートが使用中でも続行
+      // SPA対応 - 全てのルートをindex.htmlにリダイレクト
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(clientDistPath, 'index.html'));
+      });
+      
+      // サーバー起動
+      expressServer = app.listen(SERVER_PORT, () => {
+        console.log(`✅ MyRadiko embedded server running on port ${SERVER_PORT}`);
+        console.log(`📡 Health check: http://localhost:${SERVER_PORT}/api/health`);
+        console.log(`🎵 Web app: http://localhost:${SERVER_PORT}`);
+        resolve();
+      });
+      
+      expressServer.on('error', (err) => {
+        console.error('❌ Server error:', err);
+        if (err.code === 'EADDRINUSE') {
+          console.error(`❌ Port ${SERVER_PORT} is already in use`);
+        }
+        resolve(); // エラーでも続行
       });
       
     } catch (error) {
-      console.error('❌ Failed to start server in main process:', {
+      console.error('❌ Failed to create embedded server:', {
         message: error.message,
-        stack: error.stack,
-        code: error.code,
-        errno: error.errno,
-        syscall: error.syscall,
-        path: error.path
+        stack: error.stack
       });
       
-      // フォールバック: UIのみ表示
       console.log('🔄 Continuing without server...');
       resolve();
     }
@@ -147,17 +101,17 @@ function startServer() {
 
 // サーバーの停止
 function stopServer() {
-  console.log('Stopping MyRadiko server...');
+  console.log('🛑 Stopping MyRadiko embedded server...');
   isQuiting = true;
   
-  // メインプロセス内のサーバーは自動的にプロセス終了時に停止
-  // 特別な停止処理は不要
   if (expressServer) {
     try {
-      expressServer.close();
+      expressServer.close(() => {
+        console.log('✅ Embedded server stopped successfully');
+      });
       expressServer = null;
     } catch (error) {
-      console.log('Server stop error (ignored):', error.message);
+      console.log('⚠️ Server stop error (ignored):', error.message);
     }
   }
 }
