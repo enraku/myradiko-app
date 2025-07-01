@@ -37,6 +37,8 @@ jobs:
       run: npm run electron:build
       env:
         GH_TOKEN: ""
+        EP_PUBLISH: "never"
+        EP_GH_TOKEN: ""
     
     - name: Create Release with GitHub CLI
       env:

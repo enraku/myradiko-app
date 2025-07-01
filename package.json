@@ -64,6 +64,7 @@
     "directories": {
       "output": "dist-electron"
     },
+    "publish": null,
     "files": [
       "electron/**/*",
       "server/**/*",
