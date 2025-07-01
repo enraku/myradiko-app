@@ -6,7 +6,6 @@ const fs = require('fs');
 // アプリケーションの状態
 let mainWindow = null;
 let tray = null;
-let serverProcess = null;
 let isQuiting = false;
 
 // 開発モードかどうかの判定
@@ -29,126 +28,79 @@ if (!gotTheLock) {
   });
 }
 
-// サーバープロセスの起動
+// サーバーの直接起動（メインプロセス内）
+let expressServer = null;
+
 function startServer() {
   return new Promise((resolve, reject) => {
-    console.log('Starting MyRadiko server...');
+    console.log('Starting MyRadiko server in main process...');
     
-    // パッケージ化された環境では、内蔵のNode.jsを使用
-    const isPackaged = app.isPackaged;
-    let nodeExecutable, serverPath, workingDir;
-    
-    if (isPackaged) {
-      // パッケージ化された環境では、サーバーを直接require()で起動
-      try {
-        const serverApp = require(path.join(__dirname, '../server/app.js'));
-        console.log('Server started via require in packaged environment');
-        resolve();
-        return;
-      } catch (error) {
-        console.error('Failed to start server via require:', error);
-        // フォールバックとして通常の方法を試す
-        nodeExecutable = process.execPath;
-        serverPath = path.join(__dirname, '../server/app.js');
-        workingDir = path.join(__dirname, '..');
-      }
-    } else {
-      // 開発環境
-      nodeExecutable = 'node';
-      serverPath = path.join(__dirname, '../server/app.js');
-      workingDir = path.join(__dirname, '..');
-    }
-    
-    console.log('Is packaged:', isPackaged);
-    console.log('Node executable:', nodeExecutable);
-    console.log('Server path:', serverPath);
-    console.log('Working directory:', workingDir);
-    
-    serverProcess = spawn(nodeExecutable, [serverPath], {
-      stdio: 'pipe',
-      cwd: workingDir
-    });
-
-    serverProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      console.log(`Server stdout: ${output}`);
-      if (output.includes('MyRadiko Server is running') || output.includes('Server running on port')) {
-        console.log('Server started successfully');
-        resolve();
-      }
-    });
-
-    serverProcess.stderr.on('data', (data) => {
-      console.error(`Server Error: ${data}`);
-    });
-
-    serverProcess.on('close', (code) => {
-      console.log(`Server process exited with code ${code}`);
-      if (!isQuiting) {
-        // サーバーが予期せず終了した場合の処理
-        setTimeout(() => {
-          if (!isQuiting) {
-            startServer();
-          }
-        }, 5000);
-      }
-    });
-
-    serverProcess.on('error', (error) => {
-      console.error('Failed to start server:', error);
-      console.error('Error details:', error.message);
-      console.error('Error code:', error.code);
+    try {
+      // パス設定を適切に行う
+      const appPath = app.isPackaged ? 
+        path.join(process.resourcesPath, 'app.asar') : 
+        path.join(__dirname, '..');
       
-      // ENOENT エラーの場合の詳細情報
-      if (error.code === 'ENOENT') {
-        console.error('Node.js executable not found. Trying alternative approach...');
-        // タイムアウトで続行させる（サーバーなしでも UI だけ表示）
-        setTimeout(() => resolve(), 1000);
-      } else {
-        reject(error);
-      }
-    });
-
-    // タイムアウト処理
-    setTimeout(() => {
-      resolve(); // 5秒経過したら強制的に続行
-    }, 5000);
+      console.log('App path:', appPath);
+      console.log('Is packaged:', app.isPackaged);
+      
+      // 作業ディレクトリを設定
+      process.chdir(appPath);
+      
+      // 環境変数設定
+      process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+      
+      // サーバーアプリケーションを直接require
+      delete require.cache[require.resolve(path.join(appPath, 'server', 'app.js'))];
+      const serverApp = require(path.join(appPath, 'server', 'app.js'));
+      
+      // Express サーバーが起動するまで少し待つ
+      setTimeout(() => {
+        console.log('Server started successfully in main process');
+        resolve();
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Failed to start server in main process:', error);
+      console.error('Error stack:', error.stack);
+      
+      // フォールバック: UIのみ表示
+      console.log('Continuing without server...');
+      resolve();
+    }
   });
 }
 
-// サーバープロセスの停止
+// サーバーの停止
 function stopServer() {
-  if (serverProcess) {
-    console.log('Stopping MyRadiko server...');
-    
-    // プロセスの終了を試行
-    if (process.platform === 'win32') {
-      // Windows: 強制終了
-      spawn('taskkill', ['/pid', serverProcess.pid, '/f', '/t'], { stdio: 'ignore' });
-    } else {
-      // Unix系: SIGTERM送信
-      serverProcess.kill('SIGTERM');
+  console.log('Stopping MyRadiko server...');
+  isQuiting = true;
+  
+  // メインプロセス内のサーバーは自動的にプロセス終了時に停止
+  // 特別な停止処理は不要
+  if (expressServer) {
+    try {
+      expressServer.close();
+      expressServer = null;
+    } catch (error) {
+      console.log('Server stop error (ignored):', error.message);
     }
-    
-    // 2秒後に強制終了
-    setTimeout(() => {
-      if (serverProcess && !serverProcess.killed) {
-        serverProcess.kill('SIGKILL');
-      }
-    }, 2000);
-    
-    serverProcess = null;
   }
 }
 
 // メインウィンドウの作成
 function createWindow() {
+  // バージョン情報を取得
+  const packageInfo = require('../package.json');
+  const appTitle = `${packageInfo.productName || 'MyRadiko'} v${packageInfo.version}`;
+  
   // ウィンドウの設定
   const windowOptions = {
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 700,
+    title: appTitle,
     // icon: path.join(__dirname, 'assets/icon.png'), // アイコンを一時的に無効化
     webPreferences: {
       nodeIntegration: false,

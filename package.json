@@ -78,7 +78,8 @@
     "nsis": {
       "oneClick": false,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "${productName}-Setup-v${version}.${ext}"
     }
   }
 }

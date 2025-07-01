@@ -74,4 +74,4 @@ jobs:
         echo "- radikoの利用規約に従ってご使用ください" >> release_notes.md
         echo "- 個人利用目的のみ" >> release_notes.md
         
-        gh release create ${{ github.ref_name }} --title "MyRadiko ${{ github.ref_name }}" --notes-file release_notes.md ./dist-electron/MyRadiko*.exe
+        gh release create ${{ github.ref_name }} --title "MyRadiko ${{ github.ref_name }}" --notes-file release_notes.md ./dist-electron/MyRadiko-Setup-*.exe
