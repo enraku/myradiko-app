@@ -9,6 +9,9 @@ jobs:
   build-and-release:
     runs-on: windows-latest
     name: Build Windows Installer
+    permissions:
+      contents: write
+      releases: write
     
     steps:
     - name: Checkout code
@@ -38,6 +41,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         name: MyRadiko ${{ github.ref_name }}
         body: |
