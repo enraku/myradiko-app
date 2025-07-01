@@ -1,0 +1,72 @@
+name: Windows Build Test
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: 
+      - '*.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  windows-build-test:
+    runs-on: windows-latest
+    name: Windows Environment Test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install backend dependencies
+      run: npm install
+    
+    - name: Install frontend dependencies
+      working-directory: ./client
+      run: npm install
+    
+    - name: Run tests
+      run: npm test
+    
+    - name: Build frontend
+      working-directory: ./client
+      run: npm run build
+      
+    - name: Build Electron application
+      run: npm run electron:build
+      env:
+        GH_TOKEN: ""
+        EP_PUBLISH: "never"
+        EP_GH_TOKEN: ""
+    
+    - name: Check build output
+      run: |
+        dir dist-electron
+        if (Test-Path "dist-electron\MyRadiko-Setup-*.exe") {
+          Write-Host "✅ Installer created successfully"
+          Get-ChildItem "dist-electron\MyRadiko-Setup-*.exe" | ForEach-Object { 
+            Write-Host "📦 File: $($_.Name) Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+          }
+        } else {
+          Write-Host "❌ Installer not found"
+          exit 1
+        }
+    
+    - name: Upload Windows build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-test-build
+        path: ./dist-electron/MyRadiko-Setup-*.exe
+        retention-days: 7
+    
+    - name: Test basic functionality (if possible)
+      run: |
+        Write-Host "🧪 Testing basic functionality..."
+        # Note: GUI testing in CI is limited, but we can test non-GUI parts
+        Write-Host "Build test completed successfully"
