@@ -64,6 +64,8 @@
     "directories": {
       "output": "dist-electron"
     },
+    "afterSign": false,
+    "afterAllArtifactBuild": false,
     "files": [
       "electron/**/*",
       "server/**/*",
