@@ -128,17 +128,11 @@ function createWindow() {
   if (isDev) {
     startUrl = `http://localhost:${CLIENT_PORT}`;
   } else {
-    // 本番環境：サーバーが起動していればサーバー経由、そうでなければローカルファイル
-    const clientDistPath = path.join(__dirname, '../client/dist/index.html');
-    if (serverProcess) {
-      startUrl = `http://localhost:${SERVER_PORT}`;
-    } else {
-      startUrl = `file://${clientDistPath}`;
-    }
+    // 本番環境：常にサーバー経由でアクセス
+    startUrl = `http://localhost:${SERVER_PORT}`;
   }
     
   console.log('Loading URL:', startUrl);
-  console.log('Server process exists:', !!serverProcess);
   
   mainWindow.loadURL(startUrl);
   
@@ -457,17 +451,10 @@ app.on('before-quit', () => {
 
 // アプリが終了する時
 app.on('will-quit', (event) => {
-  if (serverProcess && !isQuiting) {
-    event.preventDefault();
+  if (!isQuiting) {
     isQuiting = true;
-    
     console.log('Gracefully shutting down...');
     stopServer();
-    
-    // サーバーが停止するまで待機
-    setTimeout(() => {
-      app.quit();
-    }, 3000);
   }
 });
 
