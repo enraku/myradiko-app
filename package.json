@@ -64,8 +64,6 @@
     "directories": {
       "output": "dist-electron"
     },
-    "afterSign": false,
-    "afterAllArtifactBuild": false,
     "files": [
       "electron/**/*",
       "server/**/*",
@@ -92,7 +90,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "${productName} Setup ${version}.${ext}"
     }
   }
 }
