@@ -40,8 +40,10 @@ router.delete('/reservations/:id', reservationsController.delete);
 router.get('/reservations/upcoming/:hours', reservationsController.getUpcoming);
 
 // Recordings routes
-const recordingsRoutes = require('./recordings');
-router.use('/recordings', recordingsRoutes);
+router.get('/recordings', recordingsController.getAll);
+router.get('/recordings/:id', recordingsController.getById);
+router.delete('/recordings/:id', recordingsController.delete);
+router.get('/recordings/recent/:days', recordingsController.getRecent);
 
 // Scheduler routes
 router.get('/scheduler/status', schedulerController.getStatus);

@@ -216,11 +216,18 @@
                     {{ downloading.includes(program.id) ? 'ダウンロード中...' : 'ダウンロード' }}
                   </button>
                   <button 
+                    v-else-if="isReservedProgram(program)"
+                    class="reserved-btn"
+                    disabled
+                  >
+                    予約済み
+                  </button>
+                  <button 
                     v-else 
                     @click="reserveProgram(program)" 
                     class="reserve-btn"
                   >
-                    録音予約
+                    予約
                   </button>
                 </div>
               </div>
@@ -276,11 +283,18 @@
                       {{ downloading.includes(program.id) ? 'ダウンロード中...' : 'ダウンロード' }}
                     </button>
                     <button 
+                      v-else-if="isReservedProgram(program)"
+                      class="reserved-btn"
+                      disabled
+                    >
+                      予約済み
+                    </button>
+                    <button 
                       v-else 
                       @click="reserveProgram(program)" 
                       class="reserve-btn"
                     >
-                      録音予約
+                      予約
                     </button>
                   </td>
                 </tr>
@@ -322,6 +336,7 @@ export default {
     const programs = computed(() => appState.programs)
     const loading = computed(() => appState.loading)
     const viewMode = computed(() => appState.viewMode)
+    const reservations = computed(() => appState.reservations)
     
     // 計算プロパティ：フィルタリングされた番組リスト
     const filteredPrograms = computed(() => {
@@ -557,6 +572,9 @@ export default {
     
     // 初期化
     onMounted(() => {
+      // 予約データを読み込み
+      actions.loadReservations()
+      
       // デフォルトで最初の放送局を選択
       if (stations.value.length > 0) {
         selectedStationId.value = stations.value[0].id
@@ -598,6 +616,15 @@ export default {
       const now = new Date()
       const programEnd = new Date(program.end_time)
       return programEnd < now
+    }
+    
+    // 予約済み番組判定
+    const isReservedProgram = (program) => {
+      return reservations.value.some(reservation => 
+        reservation.station_id === selectedStationId.value &&
+        reservation.start_time === program.start_time &&
+        reservation.end_time === program.end_time
+      )
     }
     
     // 番組ダウンロード
@@ -660,6 +687,7 @@ export default {
       
       // ダウンロード機能
       isPastProgram,
+      isReservedProgram,
       downloadProgram,
       downloading
     }
@@ -1051,6 +1079,17 @@ export default {
   background: #ccc;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.reserved-btn {
+  padding: 0.5rem 1rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: not-allowed;
+  font-size: 0.9rem;
+  opacity: 0.7;
 }
 
 /* 検索ハイライト */
