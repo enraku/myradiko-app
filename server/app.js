@@ -28,11 +28,11 @@ console.log('🔍 Environment check:', {
 
 // Initialize database on startup
 initDatabase()
-  .then(() => {
+  .then(async () => {
     console.log('✅ Database initialized successfully');
     
     // Start recording scheduler after database initialization
-    recordingScheduler.start();
+    await recordingScheduler.start();
     console.log('✅ Recording scheduler started');
   })
   .catch((error) => {

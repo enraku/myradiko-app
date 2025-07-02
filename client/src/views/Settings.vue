@@ -373,6 +373,7 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
 import { appState, actions } from '../store/index.js'
+import { settings as settingsAPI } from '../services/api'
 
 export default {
   name: 'Settings',
@@ -447,10 +448,27 @@ export default {
           localSettings.value.visible_stations = localSettings.value.visible_stations.split(',').filter(Boolean)
         }
         
+        // recording_folder が空の場合、デフォルトフォルダを取得
+        if (!localSettings.value.recording_folder || localSettings.value.recording_folder === '/home/recordings') {
+          await loadDefaultRecordingFolder()
+        }
+        
       } catch (err) {
         error.value = err.message || '設定の読み込みに失敗しました'
       } finally {
         loading.value = false
+      }
+    }
+
+    // デフォルト録音フォルダ取得
+    const loadDefaultRecordingFolder = async () => {
+      try {
+        const response = await settingsAPI.getDefaultRecordingFolder()
+        if (response.data.success && response.data.data.defaultPath) {
+          localSettings.value.recording_folder = response.data.data.defaultPath
+        }
+      } catch (err) {
+        console.warn('デフォルト録音フォルダの取得に失敗:', err.message)
       }
     }
 
@@ -532,9 +550,100 @@ export default {
       }
     }
 
-    // フォルダ選択（ダミー実装）
-    const selectFolder = () => {
-      alert('フォルダ選択機能は今後実装予定です')
+    // フォルダ選択
+    const selectFolder = async () => {
+      try {
+        // Electron環境での処理
+        if (window.electronAPI && window.electronAPI.selectFolder) {
+          const result = await window.electronAPI.selectFolder()
+          
+          if (!result.canceled && result.folderPath) {
+            // フォルダ権限チェック
+            const permissionCheck = await checkFolderPermissions(result.folderPath)
+            
+            if (permissionCheck.success) {
+              localSettings.value.recording_folder = result.folderPath
+              successMessage.value = 'フォルダを選択しました: ' + result.folderPath
+            } else {
+              error.value = permissionCheck.message
+            }
+            
+            // 3秒後にメッセージを消去
+            setTimeout(() => {
+              successMessage.value = null
+              error.value = null
+            }, 3000)
+          }
+        } else {
+          // ブラウザ環境でのフォールバック
+          const inputPath = prompt('録音ファイル保存フォルダのパスを入力してください:', localSettings.value.recording_folder)
+          if (inputPath && inputPath.trim()) {
+            localSettings.value.recording_folder = inputPath.trim()
+            successMessage.value = 'フォルダパスを設定しました: ' + inputPath.trim()
+            
+            setTimeout(() => {
+              successMessage.value = null
+            }, 3000)
+          }
+        }
+      } catch (err) {
+        error.value = 'フォルダ選択中にエラーが発生しました: ' + err.message
+      }
+    }
+
+    // フォルダ権限チェック
+    const checkFolderPermissions = async (folderPath) => {
+      try {
+        if (window.electronAPI && window.electronAPI.checkFolderPermissions) {
+          const result = await window.electronAPI.checkFolderPermissions(folderPath)
+          
+          if (!result.exists) {
+            // フォルダが存在しない場合、作成するか確認
+            const shouldCreate = confirm(`フォルダが存在しません: ${folderPath}\n\nフォルダを作成しますか？`)
+            
+            if (shouldCreate) {
+              const createResult = await window.electronAPI.createFolder(folderPath)
+              if (createResult.success) {
+                return {
+                  success: true,
+                  message: 'フォルダを作成しました: ' + folderPath
+                }
+              } else {
+                return {
+                  success: false,
+                  message: createResult.message
+                }
+              }
+            } else {
+              return {
+                success: false,
+                message: 'フォルダが選択されませんでした'
+              }
+            }
+          } else if (!result.writable) {
+            return {
+              success: false,
+              message: result.message
+            }
+          } else {
+            return {
+              success: true,
+              message: result.message
+            }
+          }
+        } else {
+          // ブラウザ環境では権限チェックをスキップ
+          return {
+            success: true,
+            message: 'フォルダを設定しました'
+          }
+        }
+      } catch (err) {
+        return {
+          success: false,
+          message: 'フォルダの権限チェック中にエラーが発生しました: ' + err.message
+        }
+      }
     }
 
     // 設定エクスポート

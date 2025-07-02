@@ -682,6 +682,85 @@ ipcMain.handle('get-app-info', () => {
   };
 });
 
+// フォルダ選択ダイアログ
+ipcMain.handle('select-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: '録音ファイル保存フォルダを選択',
+    defaultPath: app.getPath('documents')
+  });
+  
+  if (result.canceled) {
+    return { canceled: true };
+  }
+  
+  return { 
+    canceled: false, 
+    folderPath: result.filePaths[0] 
+  };
+});
+
+// フォルダ権限チェック
+ipcMain.handle('check-folder-permissions', async (event, folderPath) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // フォルダが存在するかチェック
+    if (!fs.existsSync(folderPath)) {
+      return {
+        exists: false,
+        writable: false,
+        message: 'フォルダが存在しません'
+      };
+    }
+    
+    // 書き込み権限をチェック
+    try {
+      const testFile = path.join(folderPath, '.myradiko-test-' + Date.now() + '.tmp');
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+      
+      return {
+        exists: true,
+        writable: true,
+        message: 'フォルダは書き込み可能です'
+      };
+    } catch (writeError) {
+      return {
+        exists: true,
+        writable: false,
+        message: 'フォルダの書き込み権限がありません'
+      };
+    }
+  } catch (error) {
+    return {
+      exists: false,
+      writable: false,
+      message: 'フォルダのチェック中にエラーが発生しました: ' + error.message
+    };
+  }
+});
+
+// フォルダ作成
+ipcMain.handle('create-folder', async (event, folderPath) => {
+  try {
+    const fs = require('fs');
+    
+    fs.mkdirSync(folderPath, { recursive: true });
+    
+    return {
+      success: true,
+      message: 'フォルダを作成しました'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'フォルダの作成に失敗しました: ' + error.message
+    };
+  }
+});
+
 // 未処理のエラーをキャッチ
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);

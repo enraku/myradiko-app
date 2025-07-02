@@ -1,6 +1,8 @@
 const Settings = require('../models/Settings');
+const Database = require('../models/Database');
 
 const settings = new Settings();
+const database = new Database();
 
 const settingsController = {
     // 全設定取得
@@ -131,6 +133,32 @@ const settingsController = {
             res.status(500).json({
                 success: false,
                 error: 'Failed to delete setting',
+                message: error.message
+            });
+        }
+    },
+
+    // デフォルト録音フォルダパス取得
+    async getDefaultRecordingFolder(req, res) {
+        try {
+            console.log('Getting default recording folder path');
+            
+            // Database クラスから recordingsDir を取得
+            const defaultPath = database.recordingsDir;
+            
+            res.json({
+                success: true,
+                data: {
+                    defaultPath: defaultPath,
+                    isElectron: process.versions.electron !== undefined
+                }
+            });
+        } catch (error) {
+            console.error('Failed to get default recording folder:', error);
+            
+            res.status(500).json({
+                success: false,
+                error: 'Failed to get default recording folder',
                 message: error.message
             });
         }

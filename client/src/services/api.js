@@ -150,6 +150,11 @@ export const settings = {
   // 設定削除
   delete(key) {
     return api.delete(`/settings/${key}`)
+  },
+  
+  // デフォルト録音フォルダ取得
+  getDefaultRecordingFolder() {
+    return api.get('/settings/default/recording-folder')
   }
 }
 

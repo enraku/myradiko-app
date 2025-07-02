@@ -18,6 +18,13 @@ const downloadController = {
             const recorder = new RadikoRecorder();
             const recordingHistory = new RecordingHistory();
             
+            // ファイル名とパス生成
+            const start = new Date(startTime);
+            const dateStr = start.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+            const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_').substring(0, 100);
+            const filename = `${stationId}_${dateStr}_${sanitizedTitle}.m4a`;
+            const filePath = `./recordings/${filename}`;
+
             // 録音履歴に記録
             const historyData = {
                 title,
@@ -25,8 +32,8 @@ const downloadController = {
                 station_name: stationName || stationId,
                 start_time: startTime,
                 end_time: endTime,
-                status: 'downloading',
-                type: 'download'
+                file_path: filePath,
+                status: 'downloading'
             };
             
             const historyId = await recordingHistory.create(historyData);

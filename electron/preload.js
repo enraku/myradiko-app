@@ -6,6 +6,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
   
+  // フォルダ選択ダイアログ
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+  
+  // フォルダ権限チェック
+  checkFolderPermissions: (folderPath) => ipcRenderer.invoke('check-folder-permissions', folderPath),
+  
+  // フォルダ作成
+  createFolder: (folderPath) => ipcRenderer.invoke('create-folder', folderPath),
+  
   // プラットフォーム情報
   platform: process.platform,
   

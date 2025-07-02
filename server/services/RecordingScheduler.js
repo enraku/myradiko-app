@@ -2,329 +2,383 @@ const cron = require('node-cron');
 const Reservations = require('../models/Reservations');
 const RecordingHistory = require('../models/RecordingHistory');
 const RadikoRecorder = require('./RadikoRecorder');
+const logger = require('./Logger');
 
 class RecordingScheduler {
     constructor() {
         this.reservations = new Reservations();
         this.recordingHistory = new RecordingHistory();
         this.radikoRecorder = new RadikoRecorder();
-        this.scheduledJobs = new Map();
-        this.activeRecordings = new Map();
+        this.activeDownloads = new Map();
         this.isRunning = false;
+        this.mainCronJob = null;
     }
 
-    // スケジューラー開始
-    start() {
+    /**
+     * スケジューラー開始
+     */
+    async start() {
         if (this.isRunning) {
-            console.log('Recording scheduler is already running');
+            console.log('⚠️ Scheduler is already running');
             return;
         }
 
-        console.log('Starting recording scheduler...');
+        console.log('🚀 Starting Recording Scheduler...');
+        await logger.scheduler('info', 'Recording Scheduler starting');
         
-        // 毎分チェック
-        this.mainJob = cron.schedule('* * * * *', async () => {
-            await this.checkScheduledRecordings();
-        }, {
-            scheduled: false
+        // メインのcronジョブを設定（毎分実行）
+        this.mainCronJob = cron.schedule('* * * * *', async () => {
+            try {
+                await this.checkReservations();
+            } catch (error) {
+                console.error('❌ Error in scheduler main loop:', error.message);
+                await logger.scheduler('error', 'Scheduler main loop error', {
+                    error: error.message,
+                    stack: error.stack
+                });
+            }
         });
 
-        // 予約の更新チェック（5分ごと）
-        this.updateJob = cron.schedule('*/5 * * * *', async () => {
-            await this.updateSchedules();
-        }, {
-            scheduled: false
-        });
-
-        this.mainJob.start();
-        this.updateJob.start();
         this.isRunning = true;
+        console.log('✅ Recording Scheduler started');
         
-        console.log('Recording scheduler started successfully');
-        
-        // 初回の予約更新
-        this.updateSchedules();
+        // 初回実行
+        this.checkReservations();
     }
 
-    // スケジューラー停止
+    /**
+     * スケジューラー停止
+     */
     stop() {
         if (!this.isRunning) {
-            console.log('Recording scheduler is not running');
+            console.log('⚠️ Scheduler is not running');
             return;
         }
 
-        console.log('Stopping recording scheduler...');
+        console.log('🛑 Stopping Recording Scheduler...');
         
-        if (this.mainJob) {
-            this.mainJob.stop();
-        }
-        
-        if (this.updateJob) {
-            this.updateJob.stop();
+        // メインcronジョブを停止
+        if (this.mainCronJob) {
+            this.mainCronJob.destroy();
+            this.mainCronJob = null;
         }
 
-        // 進行中の録音を停止
-        for (const [recordingId, recording] of this.activeRecordings) {
-            this.stopRecording(recordingId);
-        }
+        // アクティブなダウンロードを停止
+        this.stopAllDownloads();
 
-        this.scheduledJobs.clear();
-        this.activeRecordings.clear();
         this.isRunning = false;
-        
-        console.log('Recording scheduler stopped');
+        console.log('✅ Recording Scheduler stopped');
     }
 
-    // 予約スケジュールの更新
-    async updateSchedules() {
+    /**
+     * 予約チェック（メインループ）
+     */
+    async checkReservations() {
         try {
-            console.log('Updating recording schedules...');
+            console.log('🔍 Checking reservations...');
             
             // アクティブな予約を取得
             const activeReservations = await this.reservations.getActive();
             
-            // 現在時刻から24時間以内の予約をスケジュール
+            if (activeReservations.length === 0) {
+                console.log('📝 No active reservations found');
+                return;
+            }
+
+            console.log(`📋 Found ${activeReservations.length} active reservations`);
+            
             const now = new Date();
-            const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-            
+            let processedCount = 0;
+
             for (const reservation of activeReservations) {
-                await this.scheduleReservation(reservation, now, next24Hours);
+                try {
+                    const endTime = new Date(reservation.end_time);
+                    
+                    // 番組終了時刻を過ぎているかチェック
+                    if (endTime <= now) {
+                        await this.processCompletedReservation(reservation);
+                        processedCount++;
+                    } else {
+                        // まだ終了していない番組はログ出力のみ
+                        const remainingMinutes = Math.ceil((endTime.getTime() - now.getTime()) / (1000 * 60));
+                        console.log(`⏳ Waiting for "${reservation.title}" (${remainingMinutes} minutes remaining)`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error processing reservation ${reservation.id}:`, error.message);
+                }
+            }
+
+            if (processedCount > 0) {
+                console.log(`✅ Processed ${processedCount} completed reservations`);
             }
             
-            console.log(`Updated schedules for ${activeReservations.length} active reservations`);
         } catch (error) {
-            console.error('Failed to update schedules:', error);
+            console.error('❌ Error in checkReservations:', error.message);
         }
     }
 
-    // 個別予約のスケジューリング
-    async scheduleReservation(reservation, fromTime, toTime) {
+    /**
+     * 完了した予約の処理
+     */
+    async processCompletedReservation(reservation) {
         try {
-            const scheduleTimes = this.calculateScheduleTimes(reservation, fromTime, toTime);
+            console.log(`📻 Processing completed reservation: "${reservation.title}"`);
             
-            for (const scheduleTime of scheduleTimes) {
-                const jobId = `${reservation.id}_${scheduleTime.getTime()}`;
-                
-                // 既にスケジュール済みの場合はスキップ
-                if (this.scheduledJobs.has(jobId)) {
-                    continue;
-                }
-
-                // スケジュール時間が過去の場合はスキップ
-                if (scheduleTime <= new Date()) {
-                    continue;
-                }
-
-                console.log(`Scheduling recording: ${reservation.title} at ${scheduleTime.toISOString()}`);
-                
-                // 録音開始をスケジュール
-                const job = cron.schedule(this.toCronExpression(scheduleTime), async () => {
-                    await this.startScheduledRecording(reservation, scheduleTime);
-                    this.scheduledJobs.delete(jobId);
-                }, {
-                    scheduled: true,
-                    timezone: 'Asia/Tokyo'
-                });
-
-                this.scheduledJobs.set(jobId, {
-                    job,
-                    reservation,
-                    scheduleTime
-                });
-            }
-        } catch (error) {
-            console.error(`Failed to schedule reservation ${reservation.id}:`, error);
-        }
-    }
-
-    // 予約時間の計算
-    calculateScheduleTimes(reservation, fromTime, toTime) {
-        const times = [];
-        const startTime = new Date(reservation.start_time);
-        
-        switch (reservation.repeat_type) {
-            case 'none':
-                if (startTime >= fromTime && startTime <= toTime) {
-                    times.push(startTime);
-                }
-                break;
-                
-            case 'daily':
-                this.addDailySchedules(times, startTime, fromTime, toTime);
-                break;
-                
-            case 'weekly':
-                this.addWeeklySchedules(times, startTime, fromTime, toTime, reservation.repeat_days);
-                break;
-                
-            case 'weekdays':
-                this.addWeekdaySchedules(times, startTime, fromTime, toTime);
-                break;
-        }
-        
-        return times;
-    }
-
-    // 毎日繰り返しのスケジュール追加
-    addDailySchedules(times, originalTime, fromTime, toTime) {
-        const current = new Date(fromTime);
-        current.setHours(originalTime.getHours(), originalTime.getMinutes(), 0, 0);
-        
-        while (current <= toTime) {
-            if (current >= fromTime) {
-                times.push(new Date(current));
-            }
-            current.setDate(current.getDate() + 1);
-        }
-    }
-
-    // 週単位繰り返しのスケジュール追加
-    addWeeklySchedules(times, originalTime, fromTime, toTime, repeatDays) {
-        if (!repeatDays) return;
-        
-        const days = JSON.parse(repeatDays);
-        const current = new Date(fromTime);
-        
-        while (current <= toTime) {
-            if (days.includes(current.getDay())) {
-                const scheduleTime = new Date(current);
-                scheduleTime.setHours(originalTime.getHours(), originalTime.getMinutes(), 0, 0);
-                
-                if (scheduleTime >= fromTime && scheduleTime <= toTime) {
-                    times.push(scheduleTime);
-                }
-            }
-            current.setDate(current.getDate() + 1);
-        }
-    }
-
-    // 平日繰り返しのスケジュール追加
-    addWeekdaySchedules(times, originalTime, fromTime, toTime) {
-        const current = new Date(fromTime);
-        
-        while (current <= toTime) {
-            const dayOfWeek = current.getDay();
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) { // 月-金
-                const scheduleTime = new Date(current);
-                scheduleTime.setHours(originalTime.getHours(), originalTime.getMinutes(), 0, 0);
-                
-                if (scheduleTime >= fromTime && scheduleTime <= toTime) {
-                    times.push(scheduleTime);
-                }
-            }
-            current.setDate(current.getDate() + 1);
-        }
-    }
-
-    // スケジュールされた録音チェック
-    async checkScheduledRecordings() {
-        const now = new Date();
-        
-        // 進行中の録音の終了チェック
-        for (const [recordingId, recording] of this.activeRecordings) {
-            const endTime = new Date(recording.endTime);
-            if (now >= endTime) {
-                await this.stopRecording(recordingId);
-            }
-        }
-    }
-
-    // スケジュールされた録音開始
-    async startScheduledRecording(reservation, scheduleTime) {
-        try {
-            console.log(`Starting scheduled recording: ${reservation.title}`);
-            
-            const recordingId = `recording_${reservation.id}_${scheduleTime.getTime()}`;
+            const startTime = new Date(reservation.start_time);
             const endTime = new Date(reservation.end_time);
+            const now = new Date();
             
-            // 録音履歴に記録
-            const historyData = {
+            // 1週間以内の番組のみダウンロード可能
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            if (startTime < oneWeekAgo) {
+                console.warn(`⚠️ Reservation "${reservation.title}" is too old for download (>1 week)`);
+                await this.recordingHistory.create({
+                    reservation_id: reservation.id,
+                    title: reservation.title,
+                    station_id: reservation.station_id,
+                    station_name: reservation.station_name,
+                    start_time: reservation.start_time,
+                    end_time: reservation.end_time,
+                    file_path: '',
+                    status: 'failed'
+                });
+                
+                // 予約を無効化
+                await this.reservations.update(reservation.id, { is_active: false });
+                return;
+            }
+
+            // 既に録音済みかチェック
+            const existingRecordings = await this.recordingHistory.getByStatus('completed');
+            const alreadyRecorded = existingRecordings.find(rec => 
+                rec.reservation_id === reservation.id
+            );
+            
+            if (alreadyRecorded) {
+                console.log(`✅ Reservation "${reservation.title}" already completed`);
+                return;
+            }
+
+            // ダウンロード実行
+            await this.startDownload(reservation);
+            
+        } catch (error) {
+            console.error(`❌ Error processing completed reservation:`, error.message);
+        }
+    }
+
+    /**
+     * ダウンロード開始
+     */
+    async startDownload(reservation) {
+        try {
+            console.log(`⬇️ Starting download: "${reservation.title}"`);
+            
+            // 既にダウンロード中かチェック
+            if (this.activeDownloads.has(reservation.id)) {
+                console.log(`⚠️ Download already in progress for reservation ${reservation.id}`);
+                return;
+            }
+
+            const downloadParams = {
+                stationId: reservation.station_id,
+                startTime: new Date(reservation.start_time),
+                endTime: new Date(reservation.end_time),
+                title: reservation.title
+            };
+
+            // RadikoRecorderでダウンロード開始
+            const download = await this.radikoRecorder.downloadPastProgram(downloadParams);
+            
+            // アクティブダウンロードリストに追加
+            this.activeDownloads.set(reservation.id, {
+                reservationId: reservation.id,
+                download: download,
+                reservation: reservation
+            });
+
+            console.log(`✅ Download started for "${reservation.title}" (Download ID: ${download.id})`);
+
+            // ダウンロード完了/エラー時の処理
+            download.process.on('close', async (code) => {
+                await this.handleDownloadComplete(reservation.id, code);
+            });
+
+            download.process.on('error', async (error) => {
+                await this.handleDownloadError(reservation.id, error);
+            });
+
+        } catch (error) {
+            console.error(`❌ Failed to start download for "${reservation.title}":`, error.message);
+            
+            // エラーを録音履歴に記録
+            await this.recordingHistory.create({
+                reservation_id: reservation.id,
                 title: reservation.title,
                 station_id: reservation.station_id,
                 station_name: reservation.station_name,
-                start_time: scheduleTime.toISOString(),
-                end_time: endTime.toISOString(),
-                status: 'recording',
-                reservation_id: reservation.id
-            };
-            
-            const historyId = await this.recordingHistory.create(historyData);
-            
-            // 録音開始
-            const recording = await this.radikoRecorder.startRecording({
-                stationId: reservation.station_id,
-                duration: Math.floor((endTime - scheduleTime) / 1000),
-                title: reservation.title,
-                historyId: historyId.lastID
+                start_time: reservation.start_time,
+                end_time: reservation.end_time,
+                file_path: '',
+                status: 'failed'
             });
-            
-            this.activeRecordings.set(recordingId, {
-                reservation,
-                recording,
-                startTime: scheduleTime,
-                endTime,
-                historyId: historyId.lastID
-            });
-            
-            console.log(`Recording started: ${reservation.title} (ID: ${recordingId})`);
-            
-        } catch (error) {
-            console.error(`Failed to start scheduled recording:`, error);
-            
-            // エラー時は録音履歴を更新
-            try {
-                await this.recordingHistory.updateStatus(historyId.lastID, 'failed', error.message);
-            } catch (updateError) {
-                console.error('Failed to update recording history:', updateError);
-            }
         }
     }
 
-    // 録音停止
-    async stopRecording(recordingId) {
+    /**
+     * ダウンロード完了処理
+     */
+    async handleDownloadComplete(reservationId, exitCode) {
         try {
-            const recording = this.activeRecordings.get(recordingId);
-            if (!recording) {
-                console.log(`Recording ${recordingId} not found in active recordings`);
+            const activeDownload = this.activeDownloads.get(reservationId);
+            if (!activeDownload) {
+                console.warn(`⚠️ No active download found for reservation ${reservationId}`);
                 return;
             }
-            
-            console.log(`Stopping recording: ${recording.reservation.title}`);
-            
-            // 録音プロセス停止
-            await this.radikoRecorder.stopRecording(recording.recording);
-            
-            // 録音履歴更新
-            await this.recordingHistory.updateStatus(recording.historyId, 'completed');
-            
-            this.activeRecordings.delete(recordingId);
-            
-            console.log(`Recording stopped: ${recording.reservation.title}`);
-            
+
+            const { reservation, download } = activeDownload;
+            const isSuccess = exitCode === 0;
+
+            console.log(`🏁 Download completed for "${reservation.title}" (Exit code: ${exitCode})`);
+
+            if (isSuccess) {
+                console.log(`✅ Successfully downloaded: "${reservation.title}"`);
+                
+                // 繰り返し予約でない場合は予約を無効化
+                if (reservation.repeat_type === 'none') {
+                    await this.reservations.update(reservationId, { is_active: false });
+                    console.log(`📝 Reservation ${reservationId} marked as inactive`);
+                }
+            } else {
+                console.error(`❌ Download failed for "${reservation.title}"`);
+            }
+
+            // アクティブダウンロードリストから削除
+            this.activeDownloads.delete(reservationId);
+
         } catch (error) {
-            console.error(`Failed to stop recording ${recordingId}:`, error);
+            console.error(`❌ Error handling download completion:`, error.message);
         }
     }
 
-    // 日時をcron式に変換
-    toCronExpression(date) {
-        return `${date.getMinutes()} ${date.getHours()} ${date.getDate()} ${date.getMonth() + 1} *`;
+    /**
+     * ダウンロードエラー処理
+     */
+    async handleDownloadError(reservationId, error) {
+        try {
+            const activeDownload = this.activeDownloads.get(reservationId);
+            if (!activeDownload) {
+                console.warn(`⚠️ No active download found for reservation ${reservationId}`);
+                return;
+            }
+
+            const { reservation } = activeDownload;
+            console.error(`❌ Download error for "${reservation.title}":`, error.message);
+
+            // アクティブダウンロードリストから削除
+            this.activeDownloads.delete(reservationId);
+
+        } catch (handleError) {
+            console.error(`❌ Error handling download error:`, handleError.message);
+        }
     }
 
-    // ステータス取得
+    /**
+     * 即座に録音/ダウンロードを実行
+     */
+    async executeImmediateRecording(reservation) {
+        try {
+            const now = new Date();
+            const endTime = new Date(reservation.end_time);
+
+            if (endTime <= now) {
+                // 過去番組 → ダウンロード
+                console.log(`📻 Executing immediate download for past program: "${reservation.title}"`);
+                await this.startDownload(reservation);
+            } else {
+                // 未来番組 → 予約として追加
+                console.log(`📅 Program "${reservation.title}" scheduled for future download`);
+                console.log(`⏰ Will be downloaded after: ${endTime.toISOString()}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error in immediate recording execution:`, error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * 全ダウンロード停止
+     */
+    stopAllDownloads() {
+        console.log('🛑 Stopping all active downloads...');
+        
+        for (const [reservationId, activeDownload] of this.activeDownloads) {
+            try {
+                if (activeDownload.download && activeDownload.download.process) {
+                    activeDownload.download.process.kill('SIGTERM');
+                }
+            } catch (error) {
+                console.error(`❌ Error stopping download for reservation ${reservationId}:`, error.message);
+            }
+        }
+        
+        this.activeDownloads.clear();
+        console.log('✅ All downloads stopped');
+    }
+
+    /**
+     * 状態取得
+     */
     getStatus() {
         return {
             isRunning: this.isRunning,
-            scheduledJobs: this.scheduledJobs.size,
-            activeRecordings: this.activeRecordings.size,
-            activeRecordingsList: Array.from(this.activeRecordings.entries()).map(([id, recording]) => ({
-                id,
-                title: recording.reservation.title,
-                stationName: recording.reservation.station_name,
-                startTime: recording.startTime,
-                endTime: recording.endTime
+            activeDownloads: this.activeDownloads.size,
+            downloadList: Array.from(this.activeDownloads.values()).map(item => ({
+                reservationId: item.reservationId,
+                title: item.reservation.title,
+                stationId: item.reservation.station_id,
+                startTime: item.reservation.start_time,
+                endTime: item.reservation.end_time
             }))
         };
+    }
+
+    /**
+     * 特定のダウンロードを停止
+     */
+    async stopDownload(reservationId) {
+        const activeDownload = this.activeDownloads.get(reservationId);
+        if (!activeDownload) {
+            return false;
+        }
+
+        try {
+            if (activeDownload.download && activeDownload.download.process) {
+                activeDownload.download.process.kill('SIGTERM');
+            }
+            this.activeDownloads.delete(reservationId);
+            console.log(`🛑 Download stopped for reservation: ${reservationId}`);
+            return true;
+        } catch (error) {
+            console.error(`❌ Error stopping download:`, error.message);
+            return false;
+        }
+    }
+
+    /**
+     * アクティブダウンロード一覧取得
+     */
+    getActiveDownloads() {
+        return Array.from(this.activeDownloads.values()).map(item => ({
+            reservationId: item.reservationId,
+            downloadId: item.download.id,
+            title: item.reservation.title,
+            stationId: item.reservation.station_id,
+            stationName: item.reservation.station_name,
+            startTime: item.reservation.start_time,
+            endTime: item.reservation.end_time,
+            status: item.download.status
+        }));
     }
 }
 

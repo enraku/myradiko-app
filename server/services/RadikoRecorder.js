@@ -2,15 +2,28 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
 const RadikoAPI = require('../utils/RadikoAPI');
+const RadikoAuth = require('./RadikoAuth');
+const RecordingHistory = require('../models/RecordingHistory');
+const Database = require('../models/Database');
+const logger = require('./Logger');
+const ffmpegManager = require('./FFmpegManager');
 
 class RadikoRecorder {
     constructor() {
         this.radikoAPI = new RadikoAPI();
+        this.radikoAuth = new RadikoAuth();
         this.activeRecordings = new Map();
-        this.recordingsDir = path.join(__dirname, '../../recordings');
+        this.recordingHistory = new RecordingHistory();
+        this.database = new Database();
+        
+        // 録音ディレクトリをDatabaseクラスから取得
+        this.recordingsDir = this.database.recordingsDir;
         
         // 録音ディレクトリの作成
         this.ensureRecordingsDirectory();
+        
+        // FFmpeg初期化
+        this.initializeFFmpeg();
     }
 
     // 録音ディレクトリの確認・作成
@@ -27,30 +40,79 @@ class RadikoRecorder {
         }
     }
 
-    // 録音開始
-    async startRecording({ stationId, duration, title, historyId }) {
+    // FFmpeg初期化
+    async initializeFFmpeg() {
         try {
-            console.log(`Starting recording: ${title} (Station: ${stationId}, Duration: ${duration}s)`);
+            await ffmpegManager.initialize();
+            await logger.recording('info', 'FFmpeg initialized for recording', ffmpegManager.getInfo());
+        } catch (error) {
+            await logger.recording('error', 'FFmpeg initialization failed', {
+                error: error.message,
+                platform: process.platform
+            });
+            
+            // Windows環境の場合は詳細ガイドをログに出力
+            if (process.platform === 'win32') {
+                const guide = ffmpegManager.getWindowsInstallGuide();
+                await logger.recording('info', 'Windows FFmpeg installation guide', guide);
+            }
+        }
+    }
+
+    // 録音開始
+    async startRecording({ stationId, duration, title, reservationId = null, stationName = null }) {
+        let historyId = null;
+        
+        try {
+            console.log(`🎙️ Starting recording: ${title} (Station: ${stationId}, Duration: ${duration}s)`);
+            await logger.recording('info', 'Starting recording', {
+                title,
+                stationId,
+                duration,
+                reservationId
+            });
             
             // ファイル名生成
             const now = new Date();
+            const endTime = new Date(now.getTime() + duration * 1000);
             const dateStr = now.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
             const filename = `${stationId}_${dateStr}_${this.sanitizeFilename(title)}.m4a`;
             const outputPath = path.join(this.recordingsDir, filename);
+            
+            // データベースに録音履歴を作成
+            try {
+                const historyResult = await this.recordingHistory.create({
+                    reservation_id: reservationId,
+                    title: title,
+                    station_id: stationId,
+                    station_name: stationName || stationId,
+                    start_time: now.toISOString(),
+                    end_time: endTime.toISOString(),
+                    file_path: outputPath,
+                    status: 'recording'
+                });
+                historyId = historyResult.lastID;
+                console.log(`📝 Recording history created with ID: ${historyId}`);
+            } catch (dbError) {
+                console.error('⚠️ Failed to create recording history:', dbError.message);
+                // データベースエラーでも録音は続行
+            }
             
             // radiko録音コマンドの準備
             const recordingProcess = await this.startRadikoRecording(stationId, duration, outputPath);
             
             const recording = {
-                id: `rec_${historyId}_${Date.now()}`,
+                id: `rec_${historyId || Date.now()}`,
                 stationId,
                 title,
                 filename,
                 outputPath,
                 process: recordingProcess,
                 startTime: now,
+                endTime: endTime,
                 duration,
                 historyId,
+                reservationId,
                 status: 'recording'
             };
             
@@ -65,43 +127,106 @@ class RadikoRecorder {
                 await this.handleRecordingError(recording, error);
             });
             
+            console.log(`✅ Recording started successfully: ${recording.id}`);
             return recording;
             
         } catch (error) {
-            console.error('Failed to start recording:', error);
+            console.error('❌ Failed to start recording:', error);
+            
+            // エラー時はデータベースの状態を更新
+            if (historyId) {
+                try {
+                    await this.recordingHistory.updateStatus(historyId, 'failed', error.message);
+                } catch (dbError) {
+                    console.error('Failed to update recording history status:', dbError.message);
+                }
+            }
+            
             throw error;
         }
     }
 
     // radiko録音プロセス開始
     async startRadikoRecording(stationId, duration, outputPath) {
-        // radikoレコーダーのコマンド構築
-        // 注意: 実際の実装では適切なradiko録音ツールを使用してください
-        // この例では基本的な構造のみ示しています
-        
-        const args = [
-            'rec',
-            '--station', stationId,
-            '--duration', duration.toString(),
-            '--output', outputPath,
-            '--format', 'm4a'
+        try {
+            console.log(`🚀 Starting FFmpeg recording for ${stationId}...`);
+            
+            // radiko認証
+            const authResult = await this.radikoAuth.authenticate();
+            if (!authResult.success) {
+                throw new Error(`Authentication failed: ${authResult.error}`);
+            }
+            
+            // ストリーミングURL取得
+            const streamURL = await this.radikoAuth.getStreamURL(stationId);
+            
+            // FFmpegコマンド構築
+            const args = this.buildFFmpegArgs(streamURL, duration, outputPath);
+            
+            console.log('🎬 Starting FFmpeg process...');
+            console.log(`📁 Output: ${outputPath}`);
+            
+            // FFmpegプロセス実行
+            const process = ffmpegManager.spawn(args, {
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+            
+            // プロセス監視
+            this.setupProcessMonitoring(process, stationId);
+            
+            return process;
+            
+        } catch (error) {
+            console.error(`❌ Failed to start radiko recording for ${stationId}:`, error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * FFmpegコマンド引数の構築
+     */
+    buildFFmpegArgs(streamURL, duration, outputPath) {
+        return [
+            '-y', // 既存ファイルを上書き
+            '-headers', `X-Radiko-AuthToken: ${this.radikoAuth.authToken}`,
+            '-headers', 'Origin: https://radiko.jp',
+            '-headers', 'Accept-Encoding: gzip, deflate',
+            '-headers', 'Accept-Language: ja,en-US;q=0.8,en;q=0.6',
+            '-user_agent', this.radikoAuth.userAgent,
+            '-headers', 'Accept: */*',
+            '-headers', 'Referer: https://radiko.jp/',
+            '-headers', 'Connection: keep-alive',
+            '-i', streamURL,
+            '-vn', // 映像なし
+            '-acodec', 'copy', // 音声コーデックをコピー
+            '-t', duration.toString(), // 録音時間
+            '-f', 'mp4', // 出力フォーマット
+            outputPath
         ];
-        
-        // 実際のradiko録音ツールの実行
-        // この例では仮想的なコマンドを使用
-        const process = spawn('radiko-recorder', args, {
-            stdio: ['pipe', 'pipe', 'pipe']
-        });
-        
+    }
+
+    /**
+     * プロセス監視の設定
+     */
+    setupProcessMonitoring(process, stationId) {
         process.stdout.on('data', (data) => {
-            console.log(`Recording output: ${data}`);
+            const output = data.toString();
+            console.log(`📹 FFmpeg [${stationId}]: ${output.trim()}`);
         });
         
         process.stderr.on('data', (data) => {
-            console.error(`Recording error: ${data}`);
+            const output = data.toString();
+            // FFmpegの進行状況は stderrに出力される
+            if (output.includes('time=') || output.includes('size=')) {
+                console.log(`⏱️ Progress [${stationId}]: ${output.trim()}`);
+            } else if (output.includes('error') || output.includes('failed')) {
+                console.error(`❌ FFmpeg Error [${stationId}]: ${output.trim()}`);
+            }
         });
         
-        return process;
+        process.on('error', (error) => {
+            console.error(`❌ FFmpeg Process Error [${stationId}]:`, error.message);
+        });
     }
 
     // 録音停止
@@ -137,47 +262,89 @@ class RadikoRecorder {
     // 録音完了処理
     async handleRecordingComplete(recording, exitCode) {
         try {
-            console.log(`Recording completed: ${recording.title} (Exit code: ${exitCode})`);
+            console.log(`🏁 Recording completed: ${recording.title} (Exit code: ${exitCode})`);
             
-            recording.status = exitCode === 0 ? 'completed' : 'failed';
-            recording.endTime = new Date();
+            const isSuccess = exitCode === 0;
+            recording.status = isSuccess ? 'completed' : 'failed';
+            recording.actualEndTime = new Date();
             
-            // ファイル存在確認
+            // ファイル存在確認とサイズ取得
+            let fileSize = 0;
             try {
                 const stats = await fs.stat(recording.outputPath);
-                recording.fileSize = stats.size;
+                fileSize = stats.size;
+                recording.fileSize = fileSize;
                 
-                if (stats.size > 0) {
-                    console.log(`Recording file saved: ${recording.outputPath} (${stats.size} bytes)`);
+                if (fileSize > 0) {
+                    console.log(`📁 Recording file saved: ${recording.outputPath} (${this.formatFileSize(fileSize)})`);
                 } else {
-                    console.warn(`Recording file is empty: ${recording.outputPath}`);
+                    console.warn(`⚠️ Recording file is empty: ${recording.outputPath}`);
                     recording.status = 'failed';
                 }
             } catch (error) {
-                console.error(`Recording file not found: ${recording.outputPath}`);
+                console.error(`❌ Recording file not found: ${recording.outputPath}`);
                 recording.status = 'failed';
+                fileSize = 0;
+            }
+            
+            // データベース更新
+            if (recording.historyId) {
+                try {
+                    await this.recordingHistory.updateStatus(
+                        recording.historyId, 
+                        recording.status,
+                        recording.status === 'failed' ? 'Recording failed with exit code: ' + exitCode : null
+                    );
+                    
+                    if (fileSize > 0) {
+                        await this.recordingHistory.updateFileInfo(
+                            recording.historyId,
+                            recording.outputPath,
+                            fileSize
+                        );
+                    }
+                    
+                    console.log(`📝 Database updated for recording: ${recording.historyId}`);
+                } catch (dbError) {
+                    console.error('⚠️ Failed to update database:', dbError.message);
+                }
             }
             
             this.activeRecordings.delete(recording.id);
+            console.log(`✅ Recording process completed: ${recording.id}`);
             
         } catch (error) {
-            console.error('Failed to handle recording completion:', error);
+            console.error('❌ Failed to handle recording completion:', error);
         }
     }
 
     // 録音エラー処理
     async handleRecordingError(recording, error) {
         try {
-            console.error(`Recording error: ${recording.title}`, error);
+            console.error(`❌ Recording error: ${recording.title}`, error);
             
             recording.status = 'failed';
             recording.error = error.message;
-            recording.endTime = new Date();
+            recording.actualEndTime = new Date();
+            
+            // データベース更新
+            if (recording.historyId) {
+                try {
+                    await this.recordingHistory.updateStatus(
+                        recording.historyId, 
+                        'failed',
+                        error.message
+                    );
+                    console.log(`📝 Database updated with error for recording: ${recording.historyId}`);
+                } catch (dbError) {
+                    console.error('⚠️ Failed to update database with error:', dbError.message);
+                }
+            }
             
             this.activeRecordings.delete(recording.id);
             
         } catch (handleError) {
-            console.error('Failed to handle recording error:', handleError);
+            console.error('❌ Failed to handle recording error:', handleError);
         }
     }
 
@@ -187,6 +354,17 @@ class RadikoRecorder {
             .replace(/[<>:"/\\|?*]/g, '_')
             .replace(/\s+/g, '_')
             .substring(0, 100);
+    }
+
+    // ファイルサイズのフォーマット
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     // アクティブな録音一覧取得
@@ -275,53 +453,42 @@ class RadikoRecorder {
 
     // radikoタイムシフトダウンロード開始
     async startRadikoTimeshiftDownload(stationId, startTime, endTime, outputPath) {
-        return new Promise((resolve, reject) => {
-            // 時刻をradikoの形式に変換
-            const formatRadikoTime = (date) => {
-                return date.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '');
-            };
+        try {
+            console.log(`📻 Starting timeshift download for ${stationId}...`);
+            console.log(`⏰ Time: ${startTime.toISOString()} - ${endTime.toISOString()}`);
             
-            const startTimeStr = formatRadikoTime(startTime);
-            const endTimeStr = formatRadikoTime(endTime);
+            // radiko認証
+            const authResult = await this.radikoAuth.authenticate();
+            if (!authResult.success) {
+                throw new Error(`Authentication failed: ${authResult.error}`);
+            }
             
-            console.log(`Downloading timeshift: ${stationId} from ${startTimeStr} to ${endTimeStr}`);
+            // タイムシフトストリーミングURL取得
+            const streamURL = await this.radikoAuth.getTimeshiftStreamURL(stationId, startTime, endTime);
             
-            // radikoタイムシフト録音のコマンド（実際の実装では適切なradiko録音ツールを使用）
-            // ここでは仮のコマンドとして記述
-            const args = [
-                '-station', stationId,
-                '-start', startTimeStr,
-                '-end', endTimeStr,
-                '-output', outputPath
-            ];
+            // 録音時間を計算
+            const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
             
-            // 実際のradiko録音プロセス（rec_radiko.plやrec_radikoなど）
-            const process = spawn('rec_radiko.pl', args, {
+            // FFmpegコマンド構築
+            const args = this.buildFFmpegArgs(streamURL, duration, outputPath);
+            
+            console.log('🎬 Starting FFmpeg timeshift process...');
+            console.log(`📁 Output: ${outputPath}`);
+            
+            // FFmpegプロセス実行
+            const process = ffmpegManager.spawn(args, {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
             
-            process.on('error', (error) => {
-                console.error('Failed to start radiko timeshift download process:', error);
-                reject(error);
-            });
+            // プロセス監視
+            this.setupProcessMonitoring(process, `${stationId}-timeshift`);
             
-            process.on('spawn', () => {
-                console.log('Radiko timeshift download process started');
-                resolve(process);
-            });
+            return process;
             
-            process.stdout.on('data', (data) => {
-                console.log(`Download stdout: ${data}`);
-            });
-            
-            process.stderr.on('data', (data) => {
-                console.error(`Download stderr: ${data}`);
-            });
-            
-            process.on('close', (code) => {
-                console.log(`Download process exited with code ${code}`);
-            });
-        });
+        } catch (error) {
+            console.error(`❌ Failed to start timeshift download for ${stationId}:`, error.message);
+            throw error;
+        }
     }
 }
 

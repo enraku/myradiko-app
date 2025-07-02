@@ -56,12 +56,17 @@ router.get('/settings', settingsController.getAll);
 router.get('/settings/:key', settingsController.get);
 router.put('/settings/:key', settingsController.set);
 router.delete('/settings/:key', settingsController.delete);
+router.get('/settings/default/recording-folder', settingsController.getDefaultRecordingFolder);
 
 // Logs routes
 router.get('/logs', logsController.getAll);
 router.get('/logs/level/:level', logsController.getByLevel);
 router.get('/logs/category/:category', logsController.getByCategory);
 router.get('/logs/recent/:days', logsController.getRecent);
+router.get('/logs/config', logsController.getConfig);
+router.post('/logs/level', logsController.setLogLevel);
+router.post('/logs/cleanup', logsController.cleanup);
+router.post('/logs/test', logsController.createTestLog);
 
 // Download routes
 router.post('/downloads', downloadController.downloadPastProgram);
@@ -71,6 +76,8 @@ router.post('/downloads/:downloadId/stop', downloadController.stopDownload);
 
 // System routes
 router.get('/system/info', systemController.getSystemInfo);
+router.get('/system/stats', systemController.getDetailedStats);
+router.get('/system/health', systemController.healthCheck);
 router.post('/system/open-recordings-folder', systemController.openRecordingsFolder);
 router.post('/system/open-folder', systemController.openFolder);
 
