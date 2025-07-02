@@ -316,9 +316,6 @@ function createWindow() {
   // ウィンドウが準備できたら表示
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    
-    // デバッグのため DevTools を常に開く（一時的）
-    mainWindow.webContents.openDevTools();
   });
 
   // アプリケーションのロード
@@ -398,17 +395,24 @@ function createWindow() {
   // ウィンドウが閉じられる時の処理
   mainWindow.on('close', (event) => {
     if (!isQuiting) {
-      event.preventDefault();
-      mainWindow.hide();
-      
-      // 初回のみトレイ通知を表示
-      if (tray && !mainWindow.wasHiddenBefore) {
-        tray.displayBalloon({
-          iconType: 'info',
-          title: 'MyRadiko',
-          content: 'アプリケーションはバックグラウンドで実行されています'
-        });
-        mainWindow.wasHiddenBefore = true;
+      // トレイアイコンが有効な場合のみバックグラウンド実行
+      if (tray) {
+        event.preventDefault();
+        mainWindow.hide();
+        
+        // 初回のみトレイ通知を表示
+        if (!mainWindow.wasHiddenBefore) {
+          tray.displayBalloon({
+            iconType: 'info',
+            title: 'MyRadiko',
+            content: 'アプリケーションはバックグラウンドで実行されています'
+          });
+          mainWindow.wasHiddenBefore = true;
+        }
+      } else {
+        // トレイアイコンがない場合は完全に終了
+        isQuiting = true;
+        app.quit();
       }
     }
   });
@@ -442,6 +446,9 @@ function createTray() {
       label: 'MyRadiko を開く',
       click: () => {
         if (mainWindow) {
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
           mainWindow.show();
           mainWindow.focus();
         } else {
@@ -485,6 +492,9 @@ function createTray() {
   // トレイアイコンをダブルクリック時
   tray.on('double-click', () => {
     if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
       mainWindow.show();
       mainWindow.focus();
     } else {
@@ -627,9 +637,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // macOS以外では、ウィンドウが閉じられてもアプリは終了しない
   if (process.platform !== 'darwin') {
-    // トレイアイコンがある場合は継続実行
+    // トレイアイコンがある場合は継続実行、ない場合は終了
     if (!tray) {
       isQuiting = true;
+      stopServer();
       app.quit();
     }
   }
